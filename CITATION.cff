@@ -1,0 +1,25 @@
+cff-version: 1.2.0
+message: "If you use this idea or software, please cite it as below."
+title: "Common Ground: a knowledge graph as a shared medium for communication between humans and language models"
+type: software
+authors:
+  - family-names: "Gray"
+    given-names: "Nicholas"
+    # orcid: "https://orcid.org/0000-0000-0000-0000"
+version: 0.1.0
+date-released: 2026-09-27
+license: MIT
+repository-code: "https://github.com/ndg13b/CommonGround"
+abstract: >-
+  A prototype in which humans and language models build a knowledge graph
+  together. Every link carries a rationale, participants record agreement,
+  disagreement or uncertainty with reasons, revisions supersede rather than
+  overwrite, and multi-hop answers report their weakest link. The graph
+  serves as common ground: a shared, inspectable record of how human and
+  model understanding converge.
+keywords:
+  - knowledge graph
+  - large language models
+  - human-AI collaboration
+  - common ground
+  - retrieval-augmented generation
