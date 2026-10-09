@@ -6,20 +6,25 @@ authors:
   - family-names: "Gray"
     given-names: "Nicholas"
     # orcid: "https://orcid.org/0000-0000-0000-0000"
-version: 0.1.0
-date-released: 2026-09-27
+version: 0.2.0
+date-released: 2026-10-09
 license: MIT
 repository-code: "https://github.com/ndg13b/CommonGround"
 abstract: >-
   A prototype in which humans and language models build a knowledge graph
-  together. Every link carries a rationale, participants record agreement,
-  disagreement or uncertainty with reasons, revisions supersede rather than
-  overwrite, and multi-hop answers report their weakest link. The graph
-  serves as common ground: a shared, inspectable record of how human and
-  model understanding converge.
+  together, as a shared and inspectable record of their common ground. Every
+  link carries a rationale and may only cite registered sources. Participants
+  agree, disagree or express doubt with reasons, and raise questions
+  separately from doubts. Agreement counts only from an independent
+  participant, and models must explain theirs. Claims that were wrong are
+  revised and kept on record; claims that were too broad are refined, and
+  both versions stay. Multi-hop answers report their weakest link and any
+  open questions, and a review queue directs human attention to the claims
+  that current questions depend on.
 keywords:
   - knowledge graph
   - large language models
   - human-AI collaboration
   - common ground
+  - argumentation
   - retrieval-augmented generation
