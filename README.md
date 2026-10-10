@@ -45,7 +45,7 @@ python examples/acme_recall.py
 ## Design principles
 
 1. **Every link needs a reason.** A claim without a rationale is rejected. So is disagreeing or doubting without saying why, because the other side needs something to respond to.
-2. **Doubts and questions are different.** `unsure` means "this may be false". To ask about a claim without doubting it, raise a question. It is answered once someone offers a claim as the answer and someone else agrees with that claim afterwards. Agreement given earlier doesn't count, and a question can't be answered by the claim it is about.
+2. **Doubts and questions are different.** `unsure` means "this may be false". To ask about a claim without doubting it, raise a question. It is answered once someone offers a claim as the answer and a participant independent of them agrees with that claim afterwards, leaving it accepted. Agreement given earlier doesn't count, and a question can't be answered by the claim it is about.
 3. **Agreement has to mean something.** A claim is only *accepted* once an independent participant agrees and nobody objects. Independent means not the proposer, and not anyone sharing the proposer's identity, such as a second instance of the same model. Models must say why they agree, because language models tend to agree too readily. Claims can only cite registered sources, and the log records who supplied each one. Statuses: `proposed`, `accepted`, `uncertain`, `disputed`, `superseded`.
 4. **Nothing is erased.** A claim that was wrong is *revised*: the new claim supersedes it and the old one stays on record. A claim that was true but too broad is *refined*: both stay. Every action goes into an append-only log.
 5. **Claims carry their conditions.** Qualifiers such as `{"for customer": "Acme Corp"}` or `{"from": "2019", "until": "2023"}` keep scope and time out of the relation name. An optional vocabulary stops synonyms from splitting the graph.
@@ -70,13 +70,13 @@ q = g.ask("nina", "Which plant makes Acme's cells?", about=[c.id])
 r = g.refine(c.id, "model", "Narrowing to Acme's orders.",
              qualifiers={"for customer": "Acme Corp"},
              rationale="Acme's purchase order ships from Lyon.")  # revise() if c was wrong
-g.answer(q.id, "model", r.id)             # answered once someone else agrees with r
+g.answer(q.id, "model", r.id)             # answered once someone independent agrees with r
 
 paths = g.find_paths("VoltCo", "Lyon plant")  # chains of claims, shortest and best supported first
 g.explain_path(paths[0])                  # readable, with objections, questions and weakest link
 g.why(c.id)                               # full history of one claim
 g.review_queue(focus=[("VoltCo", "Lyon plant")])  # unsettled claims, most depended on first
-g.open_questions()                        # questions with no accepted answer
+g.open_questions()                        # questions not yet answered
 g.to_context()                            # text to give any LLM as context
 g.to_mermaid()                            # diagram
 g.save("graph.json")                      # everything, including the log

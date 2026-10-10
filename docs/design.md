@@ -26,12 +26,12 @@ Version 0.2 separates the cases, following IBIS (Issue-Based Information System;
 | may be false | `respond(..., "unsure", reason)` | becomes `uncertain` |
 | is true but doesn't say enough | `ask(..., about=[claim_id])` | none; every chain through it, or through a revision or refinement of it, reports the question until a claim in that chain answers it |
 
-A question is *answered* when someone offers a claim as the answer with `answer()`, and someone other than the person who offered it then agrees with that claim, leaving it accepted. Agreement given before the offer doesn't count, so nobody can close a question with a claim that was already settled, and a question can't be answered by the claim it is about. Nobody has to take an answer on trust.
+A question is *answered* when someone offers a claim as the answer with `answer()`, and a participant independent of whoever offered it (one that doesn't share their identity) then agrees with that claim, leaving it accepted. Agreement given before the offer doesn't count, so nobody can close a question with a claim that was already settled, and a question can't be answered by the claim it is about or by a copy of it. Nobody has to take an answer on trust.
 
 The same split applies to changing a claim:
 
 - `revise()` replaces a claim that was **wrong**. The original is marked `superseded` and leaves the active graph, but stays on record. Questions asked about it carry over to its replacement.
-- `refine()` adds a narrower version of a claim that was **true but too broad**. Both stay active and each links to the other, including after the refinement is itself revised. Questions asked about the original apply to the refinement too, so narrowing a claim can't route around an open question.
+- `refine()` adds a narrower version of a claim that was **true but too broad**. Both stay active and each links to the other, including after the refinement is itself revised, as long as it still narrows the original. Questions asked about the original, or about any later revision of it, apply to the refinement too, so narrowing a claim can't route around an open question.
 
 ## Agreement has to mean something
 

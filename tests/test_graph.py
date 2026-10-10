@@ -250,6 +250,29 @@ def test_refinements_carry_questions_until_answered_in_the_chain(g):
     assert "Every link is accepted and no question about them is open." in text
 
 
+def test_questions_reach_refinements_of_earlier_versions(g):
+    _, c2, _ = chain(g)
+    for c in g.active_claims():
+        g.respond(c.id, "nina", "agree")
+    r = g.refine(c2.id, "model", "narrow", qualifiers={"for customer": "Acme"})
+    g.respond(r.id, "nina", "agree")
+    c5 = g.revise(c2.id, "model", "better rationale", rationale="doc 2, page 3")
+    g.respond(c5.id, "nina", "agree")
+    g.ask("nina", "which plant makes Acme's cells?", about=[c5.id])
+    assert f"q1 on {r.id} is still open" in g.explain_path(chain_through(g, r.id))
+    assert f"| refines c2 (since revised as {c5.id})\n" in g.to_context()
+    assert f"Refines c2 (since revised as {c5.id})" in g.why(r.id)
+
+
+def test_a_copy_of_the_questioned_claim_cannot_answer_it(g):
+    _, c2, _, q = agreed_chain_with_question(g)
+    r = g.refine(c2.id, "model", "narrow", qualifiers={"for customer": "Acme"})
+    duplicate = g.revise(r.id, "model", "drop the scope", qualifiers={})
+    assert duplicate.refines is None  # no longer narrower than c2
+    with pytest.raises(ValueError):
+        g.answer(q.id, "model", duplicate.id)
+
+
 def test_answers_follow_revisions(g):
     _, c2, _, q = agreed_chain_with_question(g)
     c4 = g.refine(c2.id, "model", "narrowing", qualifiers={"for customer": "Acme Corp"})

@@ -62,6 +62,11 @@ def _utcnow() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
+def _content(claim: Claim) -> tuple:
+    """What a claim says, ignoring who said it and why."""
+    return (claim.subject, claim.relation, claim.object, claim.qualifiers)
+
+
 def _qualifier_text(qualifiers: dict[str, str]) -> str:
     if not qualifiers:
         return ""
@@ -342,7 +347,9 @@ class CommonGround:
             qualifiers=old.qualifiers if qualifiers is None else qualifiers,
         )
         new.supersedes = old.id
-        new.refines = old.refines
+        # A revised refinement stays one only while it still narrows what it refined.
+        if old.refines and _content(new) != _content(self.claims[old.refines]):
+            new.refines = old.refines
         old.superseded_by = new.id
         self._record(by, "revise", old.id, f"-> {new.id}: {reason}")
         return new
@@ -413,21 +420,23 @@ class CommonGround:
     def answer(self, question_id: str, by: str, claim_id: str) -> Question:
         """Offer a claim as the answer to a question.
 
-        The question counts as answered once the claim is accepted and someone
-        other than the person offering it has agreed with it since the offer.
-        Agreement given before the offer doesn't count, so nobody can close a
-        question with a claim that was already settled. A question can't be
-        answered by a claim it is about; offer a refinement instead.
+        The question counts as answered once the claim is accepted and a
+        participant independent of the offerer (not sharing their identity) has
+        agreed with it since the offer. Agreement given before the offer doesn't
+        count, so nobody can close a question with a claim that was already
+        settled. A question can't be answered by a claim it is about, or by a
+        copy of one; offer a refinement instead.
         """
         participant = self._require_participant(by)
         question = self._get_question(question_id)
         claim = self._get(claim_id)
         if claim.status is Status.SUPERSEDED:
             raise ValueError(f"{claim_id} was superseded by {claim.superseded_by}; offer that instead.")
-        if claim.id in {self._current(c).id for c in question.about}:
+        about = [self._current(c) for c in question.about]
+        if any(claim.id == a.id or _content(claim) == _content(a) for a in about):
             raise ValueError(
-                f"{question.id} is about {claim.id}, so {claim.id} can't answer it. "
-                "Offer a refinement or another claim instead."
+                f"{claim.id} is, or repeats, a claim that {question.id} is about, so it can't "
+                "answer it. Offer a refinement or another claim instead."
             )
         if all(offer.claim != claim.id for offer in question.answers):
             question.answers.append(Offer(claim.id, by, participant.identity, len(self.log)))
@@ -438,7 +447,7 @@ class CommonGround:
         """Claims that answer a question, following any revisions.
 
         A claim answers a question once it is offered as the answer, is accepted,
-        and someone other than the offerer has agreed with it since the offer.
+        and a participant independent of the offerer has agreed with it since the offer.
         """
         question = self._get_question(question_id)
         answers: dict[str, Claim] = {}
@@ -453,7 +462,7 @@ class CommonGround:
         return list(answers.values())
 
     def open_questions(self) -> list[Question]:
-        """Questions with no accepted answer yet, oldest first."""
+        """Questions that no claim answers yet (see answers_to()), oldest first."""
         return [q for q in self.questions.values() if not self.answers_to(q.id)]
 
     # ---------------------------------------------------------------- queries
@@ -570,7 +579,8 @@ class CommonGround:
             lines.append(f"  {name}: {pos.stance.value}" + (f" ({'; '.join(details)})" if details else ""))
         lines += [f"  {note}" for note in self._question_notes(claim)]
         if claim.refines:
-            lines.append(f"  Refines {claim.refines}: {self.claims[claim.refines].triple()}")
+            refined = self.claims[claim.refines]
+            lines.append(f"  Refines {self._refined_text(claim)}: {refined.triple()}")
         refined_by = list(dict.fromkeys(
             self._current(c.id).id for c in self.claims.values() if c.refines == claim.id
         ))
@@ -598,7 +608,7 @@ class CommonGround:
                 if p.stance is not Stance.AGREE
             ]
             if claim.refines:
-                notes.append(f"refines {claim.refines}")
+                notes.append(f"refines {self._refined_text(claim)}")
             notes += [f"answers {q.id}" for q in self._questions_answered_by(claim)]
             extra = f" | {'; '.join(notes)}" if notes else ""
             lines.append(f"- {claim.id}: {claim.triple()} | {claim.status.value} | {src}{extra}")
@@ -753,7 +763,11 @@ class CommonGround:
         return claim
 
     def _questions_on(self, claim: Claim) -> list[Question]:
-        """Questions asked about this claim, or about any claim it revises or refines."""
+        """Questions asked about this claim, or about any claim it revises or refines.
+
+        A claim and its revisions count as one claim here, so a question about
+        a revision still reaches refinements made before it was revised.
+        """
         lineage: set[str] = set()
         pending = [claim.id]
         while pending:
@@ -762,7 +776,19 @@ class CommonGround:
                 lineage.add(claim_id)
                 c = self.claims[claim_id]
                 pending += [i for i in (c.supersedes, c.refines) if i]
-        return [q for q in self.questions.values() if lineage.intersection(q.about)]
+        targets = {self._current(i).id for i in lineage}
+        return [
+            q for q in self.questions.values()
+            if targets.intersection(self._current(a).id for a in q.about)
+        ]
+
+    def _refined_text(self, claim: Claim) -> str:
+        """The id of the claim this one refines, noting if it has since been revised."""
+        assert claim.refines is not None
+        current = self._current(claim.refines)
+        if current.id == claim.refines:
+            return claim.refines
+        return f"{claim.refines} (since revised as {current.id})"
 
     def _question_notes(self, claim: Claim) -> list[str]:
         """A line for each question on this claim, saying whether it is answered here."""
