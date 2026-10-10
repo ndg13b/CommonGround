@@ -16,6 +16,7 @@ participants reached it.
 
 from __future__ import annotations
 
+import copy
 import json
 from collections import Counter, deque
 from dataclasses import asdict, dataclass, field
@@ -88,6 +89,7 @@ class Position:
     reason: str
     at: str
     identity: str  # the responder's identity, so agreement can be checked for independence
+    seq: int       # index of the log entry that recorded it, so positions can be ordered
     sources: list[str] = field(default_factory=list)
 
 
@@ -131,13 +133,23 @@ class Claim:
 
 
 @dataclass
+class Offer:
+    """A claim offered as the answer to a question."""
+
+    claim: str
+    by: str
+    identity: str  # the offerer's identity: their own agreement doesn't settle the question
+    seq: int       # index of the log entry that recorded the offer; only later agreement counts
+
+
+@dataclass
 class Question:
     id: str
     text: str
     asked_by: str
     created_at: str
-    about: list[str] = field(default_factory=list)    # claims it concerns
-    answers: list[str] = field(default_factory=list)  # claims offered as answers
+    about: list[str] = field(default_factory=list)      # claims it concerns
+    answers: list[Offer] = field(default_factory=list)  # claims offered as answers
 
 
 class CommonGround:
@@ -174,13 +186,23 @@ class CommonGround:
 
         Participants that share an `identity` (say, two instances of the same
         model) count as one voice when deciding whether a claim is accepted.
-        It defaults to the participant's name.
+        It defaults to the participant's name. Registering a name again returns
+        the existing participant, and is refused if the kind or identity differ.
         """
         if kind not in KINDS:
             raise ValueError("kind must be 'human' or 'model'")
         if name == SYSTEM:
             raise ValueError(f"{SYSTEM!r} is reserved for sources the system supplies.")
-        participant = Participant(name, kind, identity or name)
+        identity = identity or name
+        existing = self.participants.get(name)
+        if existing is not None:
+            if (existing.kind, existing.identity) != (kind, identity):
+                raise ValueError(
+                    f"{name!r} is already registered as a {existing.kind} "
+                    f"with identity {existing.identity!r}."
+                )
+            return existing
+        participant = Participant(name, kind, identity)
         self.participants[name] = participant
         return participant
 
@@ -239,7 +261,9 @@ class CommonGround:
             sources=sources,
             created_at=now,
             qualifiers=dict(qualifiers or {}),
-            positions={by: Position(Stance.AGREE, "proposer", now, participant.identity)},
+            positions={
+                by: Position(Stance.AGREE, "proposer", now, participant.identity, len(self.log))
+            },
         )
         self.claims[claim.id] = claim
         self._record(by, "propose", claim.id, claim.triple())
@@ -277,8 +301,12 @@ class CommonGround:
                     f"Agreement from a {participant.kind} needs a reason: say what convinced you."
                 )
         sources = self._check_sources(sources)
-        claim.positions[by] = Position(stance, reason, self._clock(), participant.identity, sources)
-        self._record(by, stance.value, claim_id, reason)
+        claim.positions[by] = Position(
+            stance, reason, self._clock(), participant.identity, len(self.log), sources
+        )
+        # The log keeps cited sources too, since a later response replaces this position.
+        cited = f"[sources: {', '.join(sources)}]" if sources else ""
+        self._record(by, stance.value, claim_id, " ".join(filter(None, (reason, cited))))
         return claim
 
     def revise(
@@ -314,6 +342,7 @@ class CommonGround:
             qualifiers=old.qualifiers if qualifiers is None else qualifiers,
         )
         new.supersedes = old.id
+        new.refines = old.refines
         old.superseded_by = new.id
         self._record(by, "revise", old.id, f"-> {new.id}: {reason}")
         return new
@@ -365,8 +394,9 @@ class CommonGround:
         """Raise a question, optionally about specific claims.
 
         A question is not a doubt: asking "which plant makes Acme's cells?" about
-        "VoltCo makes cells at Lyon" leaves that claim's status alone, but every
-        chain through the claim reports the question until it is answered.
+        "VoltCo makes cells at Lyon" leaves that claim's status alone. Every chain
+        through the claim, or through a revision or refinement of it, reports the
+        question until a claim in that chain answers it.
         """
         self._require_participant(by)
         if not text.strip():
@@ -383,26 +413,42 @@ class CommonGround:
     def answer(self, question_id: str, by: str, claim_id: str) -> Question:
         """Offer a claim as the answer to a question.
 
-        The question counts as answered once an offered claim is accepted, so an
-        answer needs independent agreement like any other claim.
+        The question counts as answered once the claim is accepted and someone
+        other than the person offering it has agreed with it since the offer.
+        Agreement given before the offer doesn't count, so nobody can close a
+        question with a claim that was already settled. A question can't be
+        answered by a claim it is about; offer a refinement instead.
         """
-        self._require_participant(by)
+        participant = self._require_participant(by)
         question = self._get_question(question_id)
         claim = self._get(claim_id)
         if claim.status is Status.SUPERSEDED:
             raise ValueError(f"{claim_id} was superseded by {claim.superseded_by}; offer that instead.")
-        if claim.id not in question.answers:
-            question.answers.append(claim.id)
+        if claim.id in {self._current(c).id for c in question.about}:
+            raise ValueError(
+                f"{question.id} is about {claim.id}, so {claim.id} can't answer it. "
+                "Offer a refinement or another claim instead."
+            )
+        if all(offer.claim != claim.id for offer in question.answers):
+            question.answers.append(Offer(claim.id, by, participant.identity, len(self.log)))
         self._record(by, "answer", question.id, f"<- {claim.id}")
         return question
 
     def answers_to(self, question_id: str) -> list[Claim]:
-        """Accepted claims offered as answers to a question, following any revisions."""
+        """Claims that answer a question, following any revisions.
+
+        A claim answers a question once it is offered as the answer, is accepted,
+        and someone other than the offerer has agreed with it since the offer.
+        """
         question = self._get_question(question_id)
         answers: dict[str, Claim] = {}
-        for claim_id in question.answers:
-            claim = self._current(claim_id)
-            if claim.status is Status.ACCEPTED:
+        for offer in question.answers:
+            claim = self._current(offer.claim)
+            confirmed = any(
+                p.stance is Stance.AGREE and p.seq > offer.seq and p.identity != offer.identity
+                for p in claim.positions.values()
+            )
+            if claim.status is Status.ACCEPTED and confirmed:
                 answers[claim.id] = claim
         return list(answers.values())
 
@@ -482,10 +528,7 @@ class CommonGround:
             for name, pos in claim.positions.items():
                 if pos.stance is not Stance.AGREE:
                     lines.append(f"      {name} is {pos.stance.value}: {pos.reason}")
-            for q in self._questions_on(claim):
-                lines.append(f"      {q.id} from {q.asked_by} ({self._answer_note(q)}): {q.text}")
-            for q in self._questions_answered_by(claim):
-                lines.append(f"      answers {q.id}: {q.text}")
+            lines += [f"      {note}" for note in self._question_notes(claim)]
 
         weakest = max(path, key=lambda c: _STRENGTH[c.status])
         unresolved = self._unresolved(path)
@@ -525,13 +568,12 @@ class CommonGround:
             if pos.sources:
                 details.append(f"sources: {', '.join(pos.sources)}")
             lines.append(f"  {name}: {pos.stance.value}" + (f" ({'; '.join(details)})" if details else ""))
-        for q in self._questions_on(claim):
-            lines.append(f"  {q.id} from {q.asked_by} ({self._answer_note(q)}): {q.text}")
-        for q in self._questions_answered_by(claim):
-            lines.append(f"  Answers {q.id}: {q.text}")
+        lines += [f"  {note}" for note in self._question_notes(claim)]
         if claim.refines:
             lines.append(f"  Refines {claim.refines}: {self.claims[claim.refines].triple()}")
-        refined_by = [c.id for c in self.claims.values() if c.refines == claim.id]
+        refined_by = list(dict.fromkeys(
+            self._current(c.id).id for c in self.claims.values() if c.refines == claim.id
+        ))
         if refined_by:
             lines.append(f"  Refined by {', '.join(refined_by)}.")
         if claim.superseded_by:
@@ -547,22 +589,26 @@ class CommonGround:
 
     def to_context(self) -> str:
         """Plain-text rendering of the common ground so far, for pasting into any LLM prompt."""
-        lines = ["Claims (each line: id, claim, status, sources, objections):"]
+        lines = ["Claims (each line: id, claim, status, sources, then any objections and links):"]
         for claim in self.active_claims():
             src = ", ".join(claim.sources) or "inferred"
-            objections = [
+            notes = [
                 f"{n} {p.stance.value}: {p.reason}"
                 for n, p in claim.positions.items()
                 if p.stance is not Stance.AGREE
             ]
-            extra = f" | {'; '.join(objections)}" if objections else ""
+            if claim.refines:
+                notes.append(f"refines {claim.refines}")
+            notes += [f"answers {q.id}" for q in self._questions_answered_by(claim)]
+            extra = f" | {'; '.join(notes)}" if notes else ""
             lines.append(f"- {claim.id}: {claim.triple()} | {claim.status.value} | {src}{extra}")
-        questions = self.open_questions()
-        if questions:
-            lines.append("Open questions:")
-            for q in questions:
-                about = f", about {', '.join(q.about)}" if q.about else ""
-                lines.append(f"- {q.id} ({q.asked_by}{about}): {q.text}")
+        if self.questions:
+            lines.append("Questions:")
+            for q in self.questions.values():
+                # Questions follow the claims they are about through revisions.
+                about_ids = list(dict.fromkeys(self._current(c).id for c in q.about))
+                about = f", about {', '.join(about_ids)}" if about_ids else ""
+                lines.append(f"- {q.id} ({q.asked_by}{about}; {self._answer_note(q)}): {q.text}")
         if self.sources:
             lines.append("Sources (only these can be cited):")
             for s in self.sources.values():
@@ -615,6 +661,7 @@ class CommonGround:
                         "reason": p.reason,
                         "at": p.at,
                         "identity": p.identity,
+                        "seq": p.seq,
                         "sources": p.sources,
                     }
                     for n, p in c.positions.items()
@@ -624,7 +671,7 @@ class CommonGround:
                 "refines": c.refines,
             }
 
-        return {
+        return copy.deepcopy({
             "settings": {
                 "vocabulary": self.vocabulary,
                 "agreement_reason_required": sorted(self.agreement_reason_required),
@@ -634,10 +681,11 @@ class CommonGround:
             "claims": [claim_dict(c) for c in self.claims.values()],
             "questions": [asdict(q) for q in self.questions.values()],
             "log": self.log,
-        }
+        })
 
     @classmethod
     def from_dict(cls, data: dict) -> "CommonGround":
+        data = copy.deepcopy(data)
         settings = data["settings"]
         graph = cls(
             vocabulary=settings["vocabulary"],
@@ -649,12 +697,15 @@ class CommonGround:
             graph.sources[s["id"]] = Source(**s)
         for c in data["claims"]:
             positions = {
-                n: Position(Stance(p["stance"]), p["reason"], p["at"], p["identity"], p["sources"])
+                n: Position(
+                    Stance(p["stance"]), p["reason"], p["at"], p["identity"], p["seq"], p["sources"]
+                )
                 for n, p in c["positions"].items()
             }
             graph.claims[c["id"]] = Claim(**{**c, "positions": positions})
         for q in data["questions"]:
-            graph.questions[q["id"]] = Question(**q)
+            answers = [Offer(**offer) for offer in q["answers"]]
+            graph.questions[q["id"]] = Question(**{**q, "answers": answers})
         graph.log = list(data["log"])
         return graph
 
@@ -702,13 +753,27 @@ class CommonGround:
         return claim
 
     def _questions_on(self, claim: Claim) -> list[Question]:
-        """Questions asked about this claim or any earlier claim it revised."""
-        lineage = set()
-        current: Optional[Claim] = claim
-        while current is not None:
-            lineage.add(current.id)
-            current = self.claims.get(current.supersedes) if current.supersedes else None
+        """Questions asked about this claim, or about any claim it revises or refines."""
+        lineage: set[str] = set()
+        pending = [claim.id]
+        while pending:
+            claim_id = pending.pop()
+            if claim_id not in lineage:
+                lineage.add(claim_id)
+                c = self.claims[claim_id]
+                pending += [i for i in (c.supersedes, c.refines) if i]
         return [q for q in self.questions.values() if lineage.intersection(q.about)]
+
+    def _question_notes(self, claim: Claim) -> list[str]:
+        """A line for each question on this claim, saying whether it is answered here."""
+        answered_here = self._questions_answered_by(claim)
+        here = {q.id for q in answered_here}
+        notes = [
+            f"{q.id} from {q.asked_by} ({self._answer_note(q)}): {q.text}"
+            for q in self._questions_on(claim)
+            if q.id not in here
+        ]
+        return notes + [f"answers {q.id} from {q.asked_by}: {q.text}" for q in answered_here]
 
     def _questions_answered_by(self, claim: Claim) -> list[Question]:
         return [

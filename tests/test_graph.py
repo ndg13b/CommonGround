@@ -22,6 +22,10 @@ def chain(g: CommonGround):
     return c1, c2, c3
 
 
+def chain_through(g: CommonGround, claim_id: str, start="Acme Corp", end="May recall"):
+    return next(p for p in g.find_paths(start, end) if claim_id in [c.id for c in p])
+
+
 def agreed_chain_with_question(g: CommonGround):
     """The worked example in miniature: every link accepted, a question asked about c2."""
     c1, c2, c3 = chain(g)
@@ -87,6 +91,14 @@ def test_invalid_stance_rejected(g):
     c1, *_ = chain(g)
     with pytest.raises(ValueError):
         g.respond(c1.id, "nina", "maybe", "hmm")
+
+
+def test_registering_a_name_again(g):
+    assert g.add_participant("nina", "human") is g.participants["nina"]
+    with pytest.raises(ValueError):
+        g.add_participant("nina", "model")
+    with pytest.raises(ValueError):
+        g.add_participant("model", "model", identity="another model")
 
 
 def test_system_is_not_a_participant_name(g):
@@ -205,6 +217,39 @@ def test_chain_that_skips_the_answer_says_so(g):
     assert "q1 on c2 was answered by c4, which is not in this chain" in other
 
 
+def test_question_cannot_be_answered_by_the_claim_it_is_about(g):
+    _, c2, _, q = agreed_chain_with_question(g)
+    with pytest.raises(ValueError):
+        g.answer(q.id, "model", c2.id)
+    c4 = g.revise(c2.id, "model", "renamed", obj="Lyon Plant")
+    with pytest.raises(ValueError):
+        g.answer(q.id, "model", c4.id)  # the same claim, revised
+
+
+def test_only_agreement_after_the_offer_answers(g):
+    c1, _, _, q = agreed_chain_with_question(g)  # c1 was accepted before the question
+    g.answer(q.id, "model", c1.id)
+    assert g.open_questions() == [q]
+    g.respond(c1.id, "model", "agree", "still true")  # the offerer can't settle it
+    assert g.open_questions() == [q]
+    g.respond(c1.id, "nina", "agree")
+    assert g.open_questions() == []
+
+
+def test_refinements_carry_questions_until_answered_in_the_chain(g):
+    _, c2, _, q = agreed_chain_with_question(g)
+    r = g.refine(c2.id, "model", "add a scope", qualifiers={"product": "cells"})
+    g.respond(r.id, "nina", "agree")
+    assert f"q1 on {r.id} is still open" in g.explain_path(chain_through(g, r.id))
+    g.answer(q.id, "model", r.id)
+    g.respond(r.id, "nina", "agree", "the purchase order confirms it")
+    best = g.find_paths("Acme Corp", "May recall")[0]
+    assert r in best
+    text = g.explain_path(best)
+    assert "answers q1 from nina: which plant makes Acme's cells?" in text
+    assert "Every link is accepted and no question about them is open." in text
+
+
 def test_answers_follow_revisions(g):
     _, c2, _, q = agreed_chain_with_question(g)
     c4 = g.refine(c2.id, "model", "narrowing", qualifiers={"for customer": "Acme Corp"})
@@ -248,6 +293,15 @@ def test_revision_keeps_history_and_links_both_ways(g):
     assert new.sources == ["doc4"]
     assert c2.id in g.claims  # never deleted
     assert "Revises c2" in g.why(new.id)
+
+
+def test_revising_a_refinement_keeps_the_link(g):
+    _, c2, _ = chain(g)
+    r = g.refine(c2.id, "model", "narrowing", qualifiers={"for customer": "Acme"})
+    r2 = g.revise(r.id, "model", "full name", qualifiers={"for customer": "Acme Corp"})
+    assert r2.refines == c2.id
+    assert g.why(c2.id).endswith(f"Refined by {r2.id}.")
+    assert "Refines c2" in g.why(r2.id)
 
 
 def test_cannot_respond_to_or_change_superseded_claim(g):
@@ -414,13 +468,21 @@ def test_mermaid_shows_qualifiers(g):
     assert '-. "rel (from: 2019) (proposed)" .->' in g.to_mermaid()
 
 
-def test_context_lists_objections_and_open_questions(g):
+def test_context_lists_objections_questions_and_links(g):
     c1, c2, _ = chain(g)
     g.respond(c1.id, "nina", "disagree", "switched suppliers")
-    g.ask("nina", "which plant?", about=[c2.id])
+    q = g.ask("nina", "which plant?", about=[c2.id])
+    c4 = g.revise(c2.id, "model", "renamed", obj="Lyon Plant")
+    r = g.refine(c4.id, "model", "narrowing", qualifiers={"for customer": "Acme Corp"})
+    g.answer(q.id, "model", r.id)
     context = g.to_context()
     assert "nina disagree: switched suppliers" in context
-    assert "q1 (nina, about c2): which plant?" in context
+    assert "q1 (nina, about c4; open): which plant?" in context  # follows the revision
+    assert "| refines c4\n" in context
+    g.respond(r.id, "nina", "agree")
+    context = g.to_context()
+    assert f"q1 (nina, about c4; answered by {r.id}): which plant?" in context
+    assert "| refines c4; answers q1\n" in context
 
 
 def test_log_records_every_action(g):
@@ -436,6 +498,27 @@ def test_log_records_every_action(g):
         "ask", "propose", "refine", "answer",
     ]
     assert [e["target"] for e in g.log[-4:]] == ["q1", "c5", "c3", "q1"]
+
+
+def test_log_keeps_cited_sources_when_a_position_changes(g):
+    c = g.propose("nina", "A", "rel", "B", "because")
+    g.respond(c.id, "model", "agree", "doc 1 confirms it", sources=["doc1"])
+    g.respond(c.id, "model", "disagree", "on reflection, no")
+    assert c.positions["model"].sources == []
+    assert g.log[-2]["detail"] == "doc 1 confirms it [sources: doc1]"
+
+
+def test_exports_do_not_share_state_with_the_graph(g):
+    c1, c2, _ = chain(g)
+    q = g.ask("nina", "which plant?", about=[c2.id])
+    data = g.to_dict()
+    data["claims"][0]["sources"].append("made-up")
+    data["log"].clear()
+    assert c1.sources == ["doc1"] and g.log
+    loaded = CommonGround.from_dict(data)
+    loaded.answer(q.id, "model", c1.id)
+    assert data["questions"][0]["answers"] == []
+    assert g.questions[q.id].answers == []
 
 
 def test_save_and_load_round_trip(g, tmp_path):

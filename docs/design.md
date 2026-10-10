@@ -10,7 +10,7 @@ Common Ground keeps that split. People will not want to talk to a model in tripl
 
 In practice:
 
-- `to_context()` renders the common ground so far (claims, open questions, citable sources and the relations in use) as text a model can read at the start of each turn.
+- `to_context()` renders the common ground so far as text a model can read at the start of each turn: claims with their objections, which claim refines which and which questions each answers; every question and whether it is answered; the sources that can be cited; and the relations in use.
 - A model's reply can include actions on the graph: propose, respond, ask, answer, refine, revise. Turning a model's reply into those actions is the job of the LLM adapter on the roadmap.
 - People take the same actions through whatever interface they use; each one is an ordinary method call.
 
@@ -24,14 +24,14 @@ Version 0.2 separates the cases, following IBIS (Issue-Based Information System;
 |---|---|---|
 | is false | `respond(..., "disagree", reason)` | becomes `disputed` |
 | may be false | `respond(..., "unsure", reason)` | becomes `uncertain` |
-| is true but doesn't say enough | `ask(..., about=[claim_id])` | none; every chain through it reports the question until it is answered |
+| is true but doesn't say enough | `ask(..., about=[claim_id])` | none; every chain through it, or through a revision or refinement of it, reports the question until a claim in that chain answers it |
 
-A question is *answered* when someone offers a claim as the answer with `answer()` and that claim is accepted. An answer needs independent agreement like any other claim, so nobody has to take it on trust.
+A question is *answered* when someone offers a claim as the answer with `answer()`, and someone other than the person who offered it then agrees with that claim, leaving it accepted. Agreement given before the offer doesn't count, so nobody can close a question with a claim that was already settled, and a question can't be answered by the claim it is about. Nobody has to take an answer on trust.
 
 The same split applies to changing a claim:
 
 - `revise()` replaces a claim that was **wrong**. The original is marked `superseded` and leaves the active graph, but stays on record. Questions asked about it carry over to its replacement.
-- `refine()` adds a narrower version of a claim that was **true but too broad**. Both stay active and each links to the other.
+- `refine()` adds a narrower version of a claim that was **true but too broad**. Both stay active and each links to the other, including after the refinement is itself revised. Questions asked about the original apply to the refinement too, so narrowing a claim can't route around an open question.
 
 ## Agreement has to mean something
 
@@ -41,9 +41,9 @@ A claim's status is only as informative as the agreement behind it, and three th
 
 This does not stop a model inventing a reason. It puts the reason on record, where it can be checked and challenged.
 
-**Uncheckable evidence.** Sources were free text, so a claim could cite a document nobody had provided. In 0.2, claims and responses can only cite sources registered with `add_source()`, and the log records who supplied each one: the system (for example, the documents a model was given) or a named participant. A model can still register a source, but then the graph shows that the model is the only one vouching for it.
+**Uncheckable evidence.** Sources were free text, so a claim could cite a document nobody had provided. In 0.2, claims and responses can only cite sources registered with `add_source()`, and the log records who supplied each one: the system (for example, the documents a model was given) or a named participant. A model can still register a source, but then the graph shows that the model is the only one vouching for it. The log also keeps the sources each response cited, so changing a response doesn't erase the evidence behind the old one.
 
-**Self-agreement.** "Accepted" required agreement from someone other than the proposer, checked by name, so two instances of the same model under different names could accept each other's claims. In 0.2 each participant has an `identity` (by default, its name). Participants that share an identity count as one voice, and agreement only counts when it comes from a different identity than the proposer's.
+**Self-agreement.** "Accepted" required agreement from someone other than the proposer, checked by name, so two instances of the same model under different names could accept each other's claims. In 0.2 each participant has an `identity` (by default, its name). Participants that share an identity count as one voice, and agreement only counts when it comes from a different identity than the proposer's. Registering a name again with a different kind or identity is refused, so a participant can't change identity partway through a graph.
 
 ## Claims carry their conditions
 

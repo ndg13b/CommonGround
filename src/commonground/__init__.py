@@ -1,10 +1,21 @@
 """Common Ground: a knowledge graph as a shared medium between humans and language models."""
 
-from .graph import Claim, CommonGround, Participant, Position, Question, Source, Stance, Status
+from .graph import (
+    Claim,
+    CommonGround,
+    Offer,
+    Participant,
+    Position,
+    Question,
+    Source,
+    Stance,
+    Status,
+)
 
 __all__ = [
     "Claim",
     "CommonGround",
+    "Offer",
     "Participant",
     "Position",
     "Question",
