@@ -9,6 +9,7 @@ from .consolidation import (
 )
 from .graph import (
     LEVELS,
+    RELIABILITY_ORDER,
     Claim,
     CommonGround,
     Level,
@@ -16,6 +17,8 @@ from .graph import (
     Participant,
     Position,
     Question,
+    Reaffirmation,
+    Reliability,
     Source,
     Stance,
     Status,
@@ -24,6 +27,7 @@ from .graph import (
 __all__ = [
     "DEFAULT_THRESHOLDS",
     "LEVELS",
+    "RELIABILITY_ORDER",
     "Claim",
     "CommonGround",
     "ConsolidationPlan",
@@ -33,6 +37,8 @@ __all__ = [
     "Position",
     "Probe",
     "Question",
+    "Reaffirmation",
+    "Reliability",
     "Source",
     "Stance",
     "Status",

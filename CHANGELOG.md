@@ -10,16 +10,21 @@ First steps toward letting a model learn from the graph. [docs/learning.md](docs
 - **What a claim rests on**: `depends_on=[...]` on `propose()`, `revise()` and `refine()`. Revisions and refinements inherit the current versions of what the original rested on. `dependents()` lists everything downstream of a claim. A revision that would rest on its own dependents is refused, so support can't be circular.
 - **`needs_recheck()`** lists active claims whose support is in doubt, because something they rest on was revised, isn't accepted, or needs re-checking itself. Most entrenched claims come first. Revising a claim with nothing changed re-affirms it.
 - **Independent sources**: `add_source(..., origin=...)` records what a source repeats, and `origin_of()` finds the original.
-- **`plan_consolidation(graph, thresholds, changed)`** (new `consolidation` module) sorts active claims into those ready to be trained into weights and those held back, with reasons. The bar is a `Threshold` per level (agreeing voices, human voices, independent sources), with `DEFAULT_THRESHOLDS`. It generates `Probe`s: core, fact, negative and ripple.
+- **Source ratings**: `add_source(..., reliability=...)` and `rate_source()` rate a source low, unrated, moderate or high. Only people, or the system that supplies a source, can rate it.
+- **Sentences**: `state()` adds a claim written as a plain sentence, such as a principle. `revise()` and `refine()` take `text=`. Sentences aren't edges of the graph, so `find_paths()`, `to_mermaid()` and `relations_in_use()` leave them out.
+- **`reaffirm()`** re-checks a flagged claim in place when it still holds: it keeps its id and agreement and rests on the current versions. It needs a reason and settled dependencies; models may re-check only facts, and only claims from another identity.
+- **`plan_consolidation(graph, thresholds, changed)`** (new `consolidation` module) sorts active claims into those ready to be trained into weights and those held back, with reasons. The bar is a `Threshold` per level (agreeing voices, human voices, independent sources), with `DEFAULT_THRESHOLDS`. By default facts need two independent sources rated moderate or better, concepts need a human among two voices, and principles need three voices including a human. It generates `Probe`s: core (every settled principle and concept, even one held back from training), fact, negative and ripple.
 - `current()` returns the latest version of a claim; `questions_on()` lists the questions about a claim.
 - `examples/learning_loop.py` and `docs/learning.md`.
+- `experiments/consolidation_run.py`: trains the claims a plan marks ready into a small model's LoRA adapter on a CPU, probes it before and after, and gates each update (install with `pip install -e ".[experiments]"`). Results from Qwen2.5-0.5B-Instruct are in `experiments/README.md` and `experiments/results/`: the gate rejected all 12 updates.
 
 ### Changed
 
 - `to_context()` groups claims under Principles, Concepts and Facts when there are principles or concepts. It also shows what each claim rests on, which claims need re-checking, and which sources repeat another.
 - `why()` shows a claim's level when it isn't a fact, what it rests on, what it supports, and why it needs re-checking.
 - `explain_path()` reports claims in the chain that need re-checking, and `find_paths()` ranks such chains lower among chains of equal length.
-- Saved graphs include each claim's level and dependencies and each source's origin. Files saved by 0.2 still load.
+- `propose()` now requires a non-empty subject, relation and object; use `state()` for a sentence.
+- Saved graphs include each claim's level, dependencies, sentence and re-checks, and each source's origin and rating. Files saved by 0.2 still load.
 
 ## 0.2.0 (2026-10-09)
 

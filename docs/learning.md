@@ -37,29 +37,47 @@ To make that affordable, knowledge should live in separable modules, such as sma
 
 This follows Quine's "web of belief" and *epistemic entrenchment* in belief-revision theory (Gärdenfors & Makinson, 1988): when evidence conflicts, revise at the edge first, and give up entrenched beliefs last. It also mirrors the split in psychology between episodic and semantic memory. Entrenched claims can still change, because a core that can never change can never be corrected. They just need more to change.
 
+Principles and many concepts aren't links between two things, so any claim can be written as a plain sentence (`state()`), such as "Advice about recalls must put customer safety first." A sentence works like any other claim but isn't an edge of the graph.
+
 ### 3. Every change has a branch
 
-A claim can say what it rests on, such as the facts and concepts a conclusion was drawn from. When a claim is revised, disputed or doubted, everything downstream of it is flagged for re-checking, with the reason. A flagged claim is then either re-affirmed or disputed. Re-affirming means revising it onto the current versions of what it rests on, after which it needs fresh agreement. Support can't be circular: a revision that would end up resting on itself is refused, because circular support could never settle.
+A claim can say what it rests on, such as the facts and concepts a conclusion was drawn from. When a claim is revised, disputed or doubted, everything downstream of it is flagged for re-checking, with the reason. A flagged claim is then dealt with in one of three ways:
+
+- **It still holds:** re-check it in place with `reaffirm()`. It keeps its id and its agreement, and now rests on the current versions. This is the lighter path, so it has guards against waving things through: it needs a reason; everything it rests on must be settled first; and a model may re-check only facts, and only claims from another identity. People may re-check anything.
+- **It no longer holds:** revise it, which creates a new version that needs fresh agreement.
+- **It's wrong:** dispute it.
+
+Support can't be circular: a revision that would end up resting on itself is refused, because circular support could never settle.
 
 This is the core of truth maintenance systems (Doyle, 1979), without their automatic withdrawal: a person or a model decides. It also answers the ripple problem from [Why it is hard](#why-it-is-hard). The graph knows what should change when one fact does, even when a model's weights don't.
 
 ### 4. A tunable bar for what reaches the weights
 
-*Accepted* means the participants agree. *Ready* means a claim may be trained into the weights. Readiness is a higher bar, set per level by three numbers:
+*Accepted* means the participants agree. *Ready* means a claim may be trained into the weights. Readiness is a higher bar, set per level:
 
 - how many distinct identities must agree, counting the proposer;
 - how many of them must be human;
-- how many independent sources the claim must cite. Copies of one original count once; a claim that rests on other claims gets its evidence from them instead.
+- how many independent sources the claim must cite, and how reliable each must be rated to count. Copies of one original count once, with the original's rating. A claim that rests on other claims gets its evidence from them instead.
 
-Whatever the level, a ready claim also has no open question on it and needs no re-checking, and everything it rests on is ready too. By default, facts need an outside source, and concepts and principles need a person among the voices agreeing to them. The bar should rise with the stakes. One part of this is not built yet: raising the bar with the number of claims that depend on a claim.
+Sources are rated low, unrated, moderate or high. Only people, or the system that supplies a source, can rate it, so a model can't vouch for evidence it brought in itself.
 
-This is the defence against poisoning, and it is only as good as the sources. An attacker can create sources, so tracking where a source came from matters as much as counting sources.
+Whatever the level, a ready claim also has no open question on it and needs no re-checking, and everything it rests on is ready too. The defaults:
+
+| Level | Agreeing voices | Of which human | Independent sources |
+|---|---|---|---|
+| Principle | 3 | 1 | none |
+| Concept | 2 | 1 | none |
+| Fact | 2 | none | 2, rated moderate or better |
+
+Three voices for a principle means a person and two others: another person, or two *different* models, which also follows section 7. With one person and one model, principles stay out of training. They are still given to the model as text on every run, and still covered by the core probes. A team would raise principles to two people. One part of this is not built yet: raising the bar with the number of claims that depend on a claim.
+
+This is the defence against poisoning, and it is only as good as the sources. An attacker can create sources, so tracking where a source came from, and who rated it, matters as much as counting sources.
 
 ### 5. Tests generated from the graph
 
 Before and after every training run, the model is given true/false statements generated from the graph:
 
-- **core:** principles and concepts. These must pass every time; an update that breaks one is rejected.
+- **core:** every settled principle and concept (accepted, nothing open on it, nothing to re-check), even one held back from training by its threshold. These must pass every time; an update that breaks one is rejected.
 - **fact:** the claims being trained in.
 - **negative:** what was revised away, which the model should now judge false.
 - **ripple:** claims resting on something that just changed, which check that the change reached them.
@@ -93,11 +111,14 @@ It would move toward recursive self-improvement if it started training on the mo
 | Idea | In Common Ground |
 |---|---|
 | Levels | `propose(..., level="principle" \| "concept" \| "fact")`. Only humans may propose, revise or refine principles. |
+| Sentences | `state(by, text, rationale, ...)` for a claim that isn't a link between two things; `revise(..., text=...)` changes one. |
 | What a claim rests on | `depends_on=[...]` on `propose()`, `revise()` and `refine()`; `dependents(claim_id)` lists everything downstream. |
-| Branch re-checking | `needs_recheck()`, most entrenched first, with reasons. Also shown by `why()`, `explain_path()` and `to_context()`. |
+| Branch re-checking | `needs_recheck()`, most entrenched first, with reasons. Also shown by `why()`, `explain_path()` and `to_context()`. `reaffirm()` re-checks a claim that still holds. |
 | Independent sources | `add_source(..., origin=...)` records what a source repeats; `origin_of()` finds the original. |
+| Source ratings | `add_source(..., reliability=...)` and `rate_source()`, by people or the system only. |
 | The bar for the weights | `plan_consolidation(graph, thresholds)` returns the claims that are ready and those held back, with reasons. |
 | Tests from the graph | `plan.probes`: core, fact, negative and ripple probes. |
+| A training run | [`experiments/consolidation_run.py`](../experiments/consolidation_run.py): train ready claims into a small model's adapter, probe before and after, gate the update. |
 | Principles first | `to_context()` lists principles first, then concepts, then facts. |
 
 [`examples/learning_loop.py`](../examples/learning_loop.py) walks through all of it: a news report is corrected, the branch resting on it is re-checked, and the new plan includes negative and ripple probes.
@@ -106,7 +127,7 @@ It would move toward recursive self-improvement if it started training on the mo
 
 - The LLM adapter from the main roadmap, so that a live model takes actions on the graph.
 - Checking agents that consult outside sources.
-- The training step: turning ready claims into training data for an adapter, running the probes before and after, and rejecting an update that fails a core probe.
+- A training recipe that adds the graph's knowledge to a model without side effects. The training step itself runs ([experiments](../experiments/README.md)), but on a small model every update so far has either made the model credulous or made it sceptical, and the gate rejected them all.
 - Separable modules per level or topic.
 - A bar that rises with the number of claims depending on a claim.
 - Multi-step question probes generated from chains of claims.
@@ -125,9 +146,11 @@ It would move toward recursive self-improvement if it started training on the mo
 
 If consolidated knowledge spreads to the ripple probes better than in-context knowledge does, without forgetting elsewhere, the approach is worth scaling.
 
+A scaled-down version has been run on a CPU with Qwen2.5-0.5B-Instruct; [experiments/README.md](../experiments/README.md#results) has the results. In short: the pipeline and the gate work, but the training didn't add the facts cleanly. Without replay, the model learned the new facts but began calling false things true; with replay, it kept its general judgement but rejected the new facts. The gate rejected all 12 updates. A larger model on a GPU is the next step.
+
 ## References
 
-Compiled from memory, without network access to check them: confirm titles and arXiv identifiers before citing.
+The arXiv entries were checked against arXiv (title, first author and year) on 8 November 2026. The others are standard references that were not checked online.
 
 - Bai, Y., et al. (2022). Constitutional AI: Harmlessness from AI feedback. arXiv:2212.08073.
 - Berglund, L., et al. (2023). The reversal curse: LLMs trained on "A is B" fail to learn "B is A". arXiv:2309.12288.

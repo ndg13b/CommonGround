@@ -96,12 +96,13 @@ A model's weights are fixed once it is trained: everything in a conversation is 
 ```python
 from commonground import plan_consolidation
 
-p = g.propose("nina", "Recall advice", "must put first", "customer safety",
-              "Company policy.", level="principle")  # only people may write principles
+p = g.state("nina", "Advice about recalls must put customer safety first.",
+            "Company policy.", level="principle")    # a sentence; only people may write principles
 k = g.propose("model", "Acme Corp", "is affected by", "May recall",
               "Follows from where Acme's cells are made.", depends_on=[c.id])
 
 g.needs_recheck()                         # after a change: what rests on it, and why it's in doubt
+# g.reaffirm(claim_id, "nina", "still holds")   # re-check a flagged claim in place, with a reason
 plan = plan_consolidation(g)              # what may be trained into weights
 plan.ready, plan.held                     # ...and why the rest may not, per a tunable bar per level
 plan.probes                               # true/false checks for the model before and after training
@@ -112,7 +113,7 @@ plan.probes                               # true/false checks for the model befo
 ## Roadmap
 
 - [ ] LLM adapter: the model reads `to_context()` and returns propose / respond / ask / answer / refine / revise actions as JSON
-- [ ] Training step: train ready claims into an adapter, run the probes before and after, and reject updates that fail a core probe ([plan](docs/learning.md#a-first-experiment))
+- [ ] A training recipe that adds the graph's knowledge to a model without side effects. A first small run on a CPU works end to end, but the gate rejected every update ([results](experiments/README.md#results)); a larger model on a GPU is next
 - [ ] Checking agents that test claims against outside sources before they are accepted
 - [ ] A small study comparing chat alone with chat plus the graph ([plan](docs/design.md#how-to-test-the-idea))
 - [ ] Interactive web view where people click a link to challenge it
@@ -121,11 +122,12 @@ plan.probes                               # true/false checks for the model befo
 - [ ] Multiple humans and models, with per-participant views of agreement
 - [x] Questions, refinements, qualifiers, registered sources, independent agreement and a review queue (v0.2)
 - [x] Levels (principle, concept, fact), what each claim rests on, branch re-checking, a bar for what may reach the weights, and probes generated from the graph (unreleased)
+- [x] Claims written as sentences, re-checking in place, source ratings, and a small training run with a gate ([experiments](experiments/README.md)) (unreleased)
 
 ## Related work
 
 - Edge et al. (2024), *From Local to Global: A Graph RAG Approach to Query-Focused Summarization* ([arXiv:2404.16130](https://arxiv.org/abs/2404.16130))
-- Gutiérrez et al. (2024), *HippoRAG: Neurobiologically Inspired Long-Term Memory for LLMs* ([arXiv:2405.14831](https://arxiv.org/abs/2405.14831))
+- Gutiérrez et al. (2024), *HippoRAG: Neurobiologically Inspired Long-Term Memory for Large Language Models* ([arXiv:2405.14831](https://arxiv.org/abs/2405.14831))
 - Rasmussen et al. (2025), *Zep: A Temporal Knowledge Graph Architecture for Agent Memory* ([arXiv:2501.13956](https://arxiv.org/abs/2501.13956))
 - Wikidata and the [Wikidata Embedding Project](https://www.wikidata.org/wiki/Wikidata:Embedding_Project); Vrandečić & Krötzsch (2014), *Wikidata: A Free Collaborative Knowledgebase*, Communications of the ACM 57(10): references, qualifiers and ranks on every statement
 - Clark & Brennan (1991), *Grounding in Communication*, the psychology of building common ground

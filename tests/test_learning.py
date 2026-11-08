@@ -1,8 +1,8 @@
-"""Levels, rests-on links, re-checking, and planning what may be trained into weights."""
+"""Levels, rests-on links, re-checking, source ratings, and planning what may be trained in."""
 
 import pytest
 
-from commonground import CommonGround, Level, Status, Threshold, plan_consolidation
+from commonground import CommonGround, Level, Reliability, Status, Threshold, plan_consolidation
 
 CLOCK = "2026-01-01T00:00:00+00:00"
 
@@ -12,10 +12,15 @@ def g() -> CommonGround:
     graph = CommonGround(clock=lambda: CLOCK)
     graph.add_participant("model", "model")
     graph.add_participant("nina", "human")
-    graph.add_source("doc1", "supplier list")
-    graph.add_source("doc2", "news report on the recall")
+    graph.add_participant("checker", "model", identity="a different model")
+    graph.add_source("doc1", "supplier list", reliability="high")
+    graph.add_source("doc2", "news report on the recall", reliability="moderate")
     graph.add_source("doc2-copy", "syndicated copy of the news report", origin="doc2")
-    graph.add_source("doc3", "corrected news report")
+    graph.add_source("doc3", "corrected news report", reliability="moderate")
+    graph.add_source("doc4", "VoltCo press release", reliability="high")
+    graph.add_source("doc5", "forum post", reliability="low")
+    graph.add_source("doc6", "purchase order", reliability="high")
+    graph.add_source("doc7", "blog post")
     return graph
 
 
@@ -28,17 +33,18 @@ def agree(g: CommonGround, *claims):
 
 def recall_case(g: CommonGround):
     """A principle, a concept, two facts and a conclusion resting on them, all agreed."""
-    principle = g.propose("nina", "Recall advice", "must put first", "customer safety",
-                          "Company policy.", level="principle")
+    principle = g.state("nina", "Advice about recalls must put customer safety first.",
+                        "Company policy.", level="principle")
     concept = g.propose("model", "A supplier recall", "affects",
                         "customers whose parts come from the recalled plant",
                         "How recalls work.", level=Level.CONCEPT)
-    supply = g.propose("model", "Acme", "gets cells from", "Lyon plant", "doc 1", ["doc1"])
-    recall = g.propose("model", "Lyon plant", "had", "May recall", "doc 2", ["doc2", "doc2-copy"])
+    supply = g.propose("model", "Acme", "gets cells from", "Lyon plant", "docs 1 and 6", ["doc1", "doc6"])
+    recall = g.propose("model", "Lyon plant", "had", "May recall", "docs 2 and 4", ["doc2", "doc4"])
     conclusion = g.propose("model", "Acme", "is affected by", "May recall",
                            "Follows from the supply, the recall and how recalls work.",
                            depends_on=[supply.id, recall.id, concept.id])
     agree(g, principle, concept, supply, recall, conclusion)
+    g.respond(principle.id, "checker", "agree", "Safety first is right for recall advice.")
     return principle, concept, supply, recall, conclusion
 
 
@@ -60,6 +66,50 @@ def test_only_humans_author_principles(g):
         g.revise(fact.id, "model", "promote it", level="principle")
     narrower = g.refine(principle.id, "nina", "narrower", qualifiers={"for": "recalls"})
     assert narrower.level is Level.PRINCIPLE
+
+
+# ------------------------------------------------------------------ sentences
+
+def test_claims_can_be_written_as_sentences(g):
+    principle = g.state("nina", "Advice about recalls must put customer safety first.",
+                        "Company policy.", level="principle")
+    assert principle.triple() == "Advice about recalls must put customer safety first"
+    assert principle.subject == principle.relation == principle.object == ""
+    assert "- c1: Advice about recalls must put customer safety first | proposed | inferred" in (
+        g.to_context()
+    )
+    with pytest.raises(ValueError):
+        g.state("nina", "  ", "why")
+    with pytest.raises(ValueError):
+        g.propose("model", "", "r", "B", "use state() for sentences")
+
+
+def test_sentences_are_not_edges(g):
+    g.state("nina", "Customers come first.", "Policy.")
+    g.propose("model", "A", "r", "B", "because")
+    assert g.relations_in_use() == ["r"]
+    assert g.to_mermaid().count("-->") + g.to_mermaid().count(".->") == 1
+    assert g.find_paths("", "") == []
+
+
+def test_vocabulary_does_not_apply_to_sentences():
+    g = CommonGround(vocabulary=["buys from"])
+    g.add_participant("nina", "human")
+    g.state("nina", "Customers come first.", "Policy.")
+
+
+def test_sentences_are_changed_with_text(g):
+    s1 = g.state("nina", "Customers come first.", "Policy.", level="principle")
+    with pytest.raises(ValueError):
+        g.revise(s1.id, "nina", "reword", subject="Customers")
+    s2 = g.revise(s1.id, "nina", "reword", text="Customer safety comes first.")
+    assert s2.text == "Customer safety comes first." and s2.level is Level.PRINCIPLE
+    narrower = g.refine(s2.id, "nina", "narrow", qualifiers={"in": "recalls"})
+    assert narrower.triple() == "Customer safety comes first (in: recalls)"
+    with pytest.raises(ValueError):
+        g.refine(s2.id, "nina", "no change")
+    fact = g.propose("model", "A", "r", "B", "because")
+    assert g.revise(fact.id, "nina", "say it plainly", text="A relates to B.").text == "A relates to B."
 
 
 # --------------------------------------------------------------- dependencies
@@ -149,6 +199,59 @@ def test_reaffirming_clears_the_flag(g):
     assert g.needs_recheck() == []
 
 
+def test_reaffirming_keeps_the_claim_and_its_agreement(g):
+    *_, recall, conclusion = recall_case(g)
+    notice = g.propose("model", "VoltCo", "must notify", "its customers", "A recall happened.",
+                       depends_on=[recall.id])
+    agree(g, notice)
+    new_recall = g.revise(recall.id, "model", "the recall was at Porto",
+                          subject="Porto plant", sources=["doc3", "doc4"])
+    g.respond(new_recall.id, "nina", "agree")
+    assert {c.id for c, _ in g.needs_recheck()} == {conclusion.id, notice.id}
+    g.reaffirm(notice.id, "nina", "VoltCo still had a recall, wherever it was.")
+    assert notice.depends_on == [new_recall.id]
+    assert notice.status is Status.ACCEPTED and notice.id in g.claims
+    assert [c.id for c, _ in g.needs_recheck()] == [conclusion.id]
+    assert (f"Re-checked by nina ({recall.id} -> {new_recall.id}): "
+            "VoltCo still had a recall, wherever it was.") in g.why(notice.id)
+    assert g.log[-1]["action"] == "reaffirm"
+    assert notice in plan_consolidation(g, changed=[new_recall.id]).ready
+
+
+def test_who_may_reaffirm(g):
+    a = g.propose("nina", "A", "r", "B", "because", ["doc1", "doc6"])
+    mine = g.propose("model", "C", "r", "D", "because", depends_on=[a.id])
+    theirs = g.propose("nina", "E", "r", "F", "because", depends_on=[a.id])
+    concept = g.propose("nina", "K", "r", "L", "because", level="concept", depends_on=[a.id])
+    agree(g, a, mine, theirs, concept)
+    a2 = g.revise(a.id, "nina", "fix", obj="B2")
+    g.respond(a2.id, "model", "agree", "checked the fix")
+    with pytest.raises(ValueError):
+        g.reaffirm(mine.id, "model", "still fine")  # its own claim
+    g.add_participant("model-2", "model", identity="model")
+    with pytest.raises(ValueError):
+        g.reaffirm(mine.id, "model-2", "still fine")  # another instance of the same model
+    with pytest.raises(ValueError):
+        g.reaffirm(concept.id, "checker", "still fine")  # models don't re-check concepts
+    with pytest.raises(ValueError):
+        g.reaffirm(theirs.id, "checker", "  ")  # a reason is needed
+    g.reaffirm(theirs.id, "checker", "Still follows from the fixed claim.")
+    g.reaffirm(mine.id, "checker", "Still follows.")
+    g.reaffirm(concept.id, "nina", "Still holds.")
+    assert g.needs_recheck() == []
+
+
+def test_reaffirming_needs_something_settled_to_rest_on(g):
+    a = g.propose("model", "A", "r", "B", "because")
+    b = g.propose("model", "B", "r", "C", "because", depends_on=[a.id])
+    agree(g, a, b)
+    with pytest.raises(ValueError):
+        g.reaffirm(b.id, "nina", "nothing changed")  # nothing to re-check
+    g.revise(a.id, "model", "fix", obj="B2")
+    with pytest.raises(ValueError):
+        g.reaffirm(b.id, "nina", "the fix isn't agreed yet")
+
+
 def test_recheck_lists_most_entrenched_first(g):
     a = g.propose("model", "A", "r", "B", "because")  # never agreed
     fact = g.propose("model", "F", "r", "G", "because", depends_on=[a.id])
@@ -212,20 +315,66 @@ def test_agreed_claims_with_enough_support_are_ready(g):
     assert plan.held == {}
 
 
-def test_facts_need_an_outside_source_unless_they_rest_on_claims(g):
+def test_facts_need_two_reliable_sources_unless_they_rest_on_claims(g):
+    *_, conclusion = recall_case(g)  # rests on claims, cites nothing, and is ready
     bare = g.propose("model", "A", "r", "B", "I remember it.")
     agree(g, bare)
-    assert plan_consolidation(g).held == {bare.id: ["needs 1 independent source(s), has 0"]}
+    assert plan_consolidation(g).held == {
+        bare.id: ["needs 2 independent source(s) rated moderate or better, has 0"]
+    }
+    assert conclusion in plan_consolidation(g).ready
 
 
 def test_copies_count_as_one_source(g):
-    *_, recall, _ = recall_case(g)
-    stricter = {Level.FACT: Threshold(sources=2)}
-    assert plan_consolidation(g, stricter).held[recall.id] == [
-        "needs 2 independent source(s), has 1"
+    fire = g.propose("model", "Lyon plant", "had", "a fire", "The news.", ["doc2", "doc2-copy"])
+    agree(g, fire)
+    assert plan_consolidation(g).held[fire.id] == [
+        "needs 2 independent source(s) rated moderate or better, has 1"
     ]
-    g.respond(recall.id, "nina", "agree", "the corrected report agrees", sources=["doc3"])
-    assert recall.id not in plan_consolidation(g, stricter).held
+    g.respond(fire.id, "nina", "agree", "VoltCo confirmed it", sources=["doc4"])
+    assert fire.id not in plan_consolidation(g).held
+
+
+def test_unrated_and_unreliable_sources_do_not_count(g):
+    fact = g.propose("model", "A", "r", "B", "Three sources.", ["doc1", "doc5", "doc7"])
+    agree(g, fact)
+    assert plan_consolidation(g).held[fact.id] == [
+        "needs 2 independent source(s) rated moderate or better, has 1"
+    ]
+    assert plan_consolidation(g, {Level.FACT: Threshold(sources=2)}).held == {}  # unrated counts here
+    g.rate_source("doc7", "nina", "moderate", "A careful trade blog.")
+    assert plan_consolidation(g).held == {}
+
+
+def test_only_people_or_the_system_rate_sources(g):
+    with pytest.raises(ValueError):
+        g.add_source("x", "my own notes", by="model", reliability="high")
+    with pytest.raises(ValueError):
+        g.rate_source("doc7", "model", "high", "trust me")
+    with pytest.raises(ValueError):
+        g.rate_source("doc7", "nina", "high", "  ")
+    assert g.add_source("y", "model notes", by="model").reliability is Reliability.UNRATED
+    g.rate_source("doc7", "nina", Reliability.LOW, "Often wrong.")
+    assert g.log[-1]["action"] == "rate source"
+    assert "- doc7: blog post (supplied by the system; rated low)" in g.to_context()
+
+
+def test_copies_count_with_their_originals_rating(g):
+    g.add_source("doc5-copy", "a copy of the forum post", origin="doc5")
+    g.rate_source("doc5-copy", "nina", "high", "Rated the copy by mistake.")
+    fact = g.propose("model", "A", "r", "B", "Two sources.", ["doc1", "doc5-copy"])
+    agree(g, fact)
+    assert fact.id in plan_consolidation(g).held  # doc5-copy repeats doc5, which is rated low
+
+
+def test_principles_need_three_voices_but_always_get_core_probes(g):
+    principle = g.state("nina", "Be honest about uncertainty.", "Policy.", level="principle")
+    g.respond(principle.id, "model", "agree", "Agreed.")
+    plan = plan_consolidation(g)
+    assert plan.held == {principle.id: ["needs 3 agreeing voices, has 2"]}
+    assert [(p.kind, p.claim) for p in plan.probes] == [("core", principle.id)]
+    g.respond(principle.id, "checker", "agree", "Agreed, as a different model.")
+    assert plan_consolidation(g).ready == [principle]
 
 
 def test_concepts_need_a_human_voice(g):
@@ -240,9 +389,9 @@ def test_concepts_need_a_human_voice(g):
 
 def test_thresholds_can_ask_for_more(g):
     principle, *_ = recall_case(g)
-    plan = plan_consolidation(g, {Level.PRINCIPLE: Threshold(voices=3, humans=2)})
+    plan = plan_consolidation(g, {Level.PRINCIPLE: Threshold(voices=4, humans=2)})
     assert plan.held == {
-        principle.id: ["needs 3 agreeing voices, has 2", "needs 2 human voice(s), has 1"]
+        principle.id: ["needs 4 agreeing voices, has 3", "needs 2 human voice(s), has 1"]
     }
 
 
@@ -281,7 +430,7 @@ def test_probes_cover_the_core_facts_ripples_and_what_was_revised_away(g):
     g.respond(again.id, "nina", "agree")
     probes = plan_consolidation(g, changed=[new_recall.id]).probes
     assert {(p.kind, p.claim): (p.statement, p.expected) for p in probes} == {
-        ("core", principle.id): ("Recall advice must put first customer safety.", True),
+        ("core", principle.id): ("Advice about recalls must put customer safety first.", True),
         ("core", concept.id): (
             "A supplier recall affects customers whose parts come from the recalled plant.", True
         ),
@@ -309,23 +458,30 @@ def test_only_ready_claims_get_probes(g):
 # --------------------------------------------------------------- serialization
 
 def test_levels_dependencies_and_origins_survive_save_and_load(g, tmp_path):
-    _, concept, supply, recall, conclusion = recall_case(g)
+    principle, concept, supply, recall, conclusion = recall_case(g)
+    new_recall = g.revise(recall.id, "model", "wrong month", obj="June recall")
+    g.respond(new_recall.id, "nina", "agree")
+    g.reaffirm(conclusion.id, "nina", "June or May, Acme is affected.")
+    g.rate_source("doc7", "nina", "moderate", "checked it")
     path = tmp_path / "graph.json"
     g.save(path)
     loaded = CommonGround.load(path)
     assert loaded.to_dict() == g.to_dict()
     assert loaded.claims[concept.id].level is Level.CONCEPT
-    assert loaded.claims[conclusion.id].depends_on == [supply.id, recall.id, concept.id]
+    assert loaded.claims[principle.id].text == principle.text
+    assert loaded.claims[conclusion.id].depends_on == [supply.id, new_recall.id, concept.id]
+    assert loaded.claims[conclusion.id].reaffirmed[0].replaced == {recall.id: new_recall.id}
     assert loaded.origin_of("doc2-copy") == "doc2"
+    assert loaded.sources["doc7"].reliability is Reliability.MODERATE
 
 
 def test_graphs_saved_by_0_2_still_load(g):
     a = g.propose("model", "A", "r", "B", "because", ["doc1"])
     data = g.to_dict()
     for c in data["claims"]:
-        del c["level"], c["depends_on"]
+        del c["level"], c["depends_on"], c["text"], c["reaffirmed"]
     for s in data["sources"]:
-        del s["origin"]
+        del s["origin"], s["reliability"]
     loaded = CommonGround.from_dict(data)
     assert loaded.claims[a.id].level is Level.FACT
     assert loaded.claims[a.id].depends_on == []

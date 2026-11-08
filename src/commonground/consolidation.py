@@ -7,10 +7,11 @@ held back, with the reasons. The bar is set per level, so principles and
 concepts can be held to more than facts.
 
 The plan also carries probes: true/false statements generated from the graph,
-to put to a model before and after training. Core probes (principles and
-concepts) must pass every time, so an update that damages the core can be
-rejected. Negative probes check that what was revised away is no longer
-believed, and ripple probes check that a change reached the claims resting on it.
+to put to a model before and after training. Core probes cover every settled
+principle and concept, even one held back from training, and must pass every
+time, so an update that damages the core can be rejected. Negative probes
+check that what was revised away is no longer believed, and ripple probes
+check that a change reached the claims resting on it.
 
 Nothing here trains a model. It produces the inputs a training and evaluation
 pipeline would need, and the record of why each claim was or wasn't included.
@@ -24,9 +25,11 @@ from typing import Iterable, Mapping, Optional
 
 from .graph import (
     LEVELS,
+    RELIABILITY_ORDER,
     Claim,
     CommonGround,
     Level,
+    Reliability,
     Stance,
     Status,
     _content,
@@ -41,14 +44,18 @@ class Threshold:
     voices: int = 2   # distinct identities agreeing with it, counting its proposer
     humans: int = 0   # how many of those identities must be human
     sources: int = 0  # independent sources cited, unless the claim rests on other claims
+    reliability: Reliability = Reliability.UNRATED  # the lowest rating a source may have to count
 
 
-# Facts need evidence from outside the conversation; concepts and principles
-# need a person among the voices agreeing to them. Raise these as stakes rise.
+# Facts need two independent, somewhat reliable sources from outside the
+# conversation. Concepts need a person among the voices agreeing to them.
+# Principles need three voices, one of them human: a person and two different
+# models, say. Raise these as the stakes rise, for example to two people for
+# principles in a team.
 DEFAULT_THRESHOLDS: Mapping[Level, Threshold] = MappingProxyType({
-    Level.PRINCIPLE: Threshold(voices=2, humans=1),
+    Level.PRINCIPLE: Threshold(voices=3, humans=1),
     Level.CONCEPT: Threshold(voices=2, humans=1),
-    Level.FACT: Threshold(voices=2, sources=1),
+    Level.FACT: Threshold(voices=2, sources=2, reliability=Reliability.MODERATE),
 })
 
 
@@ -56,9 +63,11 @@ DEFAULT_THRESHOLDS: Mapping[Level, Threshold] = MappingProxyType({
 class Probe:
     """A statement to put to a model, and whether it should judge it true.
 
-    Each ready claim gets one probe: "core" for principles and concepts, else
-    "ripple" if it rests on a claim that just changed, else "fact". A claim
-    revised away gets a "negative" probe once its replacement is ready.
+    Every settled principle and concept gets a "core" probe, whether or not it
+    is ready to be trained in: checking that an update hasn't damaged the core
+    shouldn't depend on the core being trained. Each ready fact gets a "ripple"
+    probe if it rests on a claim that just changed, else a "fact" probe. A
+    claim revised away gets a "negative" probe once its replacement is probed.
     """
 
     kind: str  # "core", "ripple", "fact" or "negative"
@@ -79,7 +88,7 @@ def plan_consolidation(
     thresholds: Optional[Mapping[Level, Threshold]] = None,
     changed: Iterable[str] = (),
 ) -> ConsolidationPlan:
-    """Sort active claims into ready and held, and generate probes for the ready ones.
+    """Sort active claims into ready and held, and generate probes.
 
     A claim is ready when it is accepted, meets its level's threshold, has no
     open question on it, doesn't need re-checking, and everything it rests on
@@ -120,7 +129,13 @@ def plan_consolidation(
                     plan.held[claim.id] = reasons
                 else:
                     plan.ready.append(claim)
-    plan.probes = _probes(graph, plan.ready, changed)
+    # Settled: accepted, nothing open on it, nothing to re-check. Thresholds aside.
+    settled = [
+        c for c in graph.active_claims()
+        if c.level is not Level.FACT and c.status is Status.ACCEPTED and c.id not in recheck
+        and all(graph.answers_to(q.id) for q in graph.questions_on(c.id))
+    ]
+    plan.probes = _probes(graph, settled, plan.ready, changed)
     return plan
 
 
@@ -130,37 +145,46 @@ def _shortfall(graph: CommonGround, claim: Claim, threshold: Threshold) -> list[
     voices = {p.identity for _, p in agreeing}
     humans = {p.identity for name, p in agreeing if graph.participants[name].kind == "human"}
     cited = list(claim.sources) + [s for _, p in agreeing for s in p.sources]
-    origins = {graph.origin_of(s) for s in cited}
+    floor = RELIABILITY_ORDER.index(threshold.reliability)
+    origins = {
+        origin for origin in (graph.origin_of(s) for s in cited)
+        if RELIABILITY_ORDER.index(graph.sources[origin].reliability) >= floor
+    }
     reasons = []
     if len(voices) < threshold.voices:
         reasons.append(f"needs {threshold.voices} agreeing voices, has {len(voices)}")
     if len(humans) < threshold.humans:
         reasons.append(f"needs {threshold.humans} human voice(s), has {len(humans)}")
     if not claim.depends_on and len(origins) < threshold.sources:
-        reasons.append(f"needs {threshold.sources} independent source(s), has {len(origins)}")
+        rated = (
+            "" if threshold.reliability is Reliability.UNRATED
+            else f" rated {threshold.reliability.value} or better"
+        )
+        reasons.append(
+            f"needs {threshold.sources} independent source(s){rated}, has {len(origins)}"
+        )
     return reasons
 
 
 def _statement(claim: Claim) -> str:
-    return f"{claim.subject} {claim.relation} {claim.object}{_qualifier_text(claim.qualifiers)}."
+    said = claim.text.rstrip(".") if claim.text else f"{claim.subject} {claim.relation} {claim.object}"
+    return f"{said}{_qualifier_text(claim.qualifiers)}."
 
 
-def _probes(graph: CommonGround, ready: list[Claim], changed: Iterable[str]) -> list[Probe]:
+def _probes(
+    graph: CommonGround, settled_core: list[Claim], ready: list[Claim], changed: Iterable[str]
+) -> list[Probe]:
     ripple = {c.id for d in changed for c in graph.dependents(d)}
-    ready_ids = {c.id for c in ready}
-    probes = []
+    probes = [Probe("core", c.id, _statement(c), True) for c in settled_core]
     for claim in ready:
-        if claim.level is not Level.FACT:
-            kind = "core"
-        elif claim.id in ripple:
-            kind = "ripple"
-        else:
-            kind = "fact"
-        probes.append(Probe(kind, claim.id, _statement(claim), True))
-    # What was revised away should no longer be believed, once its replacement is ready.
+        if claim.level is Level.FACT:
+            kind = "ripple" if claim.id in ripple else "fact"
+            probes.append(Probe(kind, claim.id, _statement(claim), True))
+    probed = {p.claim for p in probes}
+    # What was revised away should no longer be believed, once its replacement is probed.
     for claim in graph.claims.values():
         if claim.status is Status.SUPERSEDED:
             current = graph.current(claim.id)
-            if current.id in ready_ids and _content(current) != _content(claim):
+            if current.id in probed and _content(current) != _content(claim):
                 probes.append(Probe("negative", claim.id, _statement(claim), False))
     return probes

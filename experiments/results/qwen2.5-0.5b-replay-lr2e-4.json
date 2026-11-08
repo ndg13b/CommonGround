@@ -1,0 +1,1640 @@
+{
+  "model": "Qwen/Qwen2.5-0.5B-Instruct",
+  "settings": {
+    "model": "Qwen/Qwen2.5-0.5B-Instruct",
+    "device": "cpu",
+    "steps": 30,
+    "patch_steps": 15,
+    "lr": 0.0002,
+    "rank": 16,
+    "batch": 8,
+    "seed": 0,
+    "replay": true,
+    "out": "experiments/results/qwen2.5-0.5b-replay-lr2e-4.json"
+  },
+  "cutoff": 0.776,
+  "stages": {
+    "1-before-correction": {
+      "note": "compared with the base model",
+      "training_texts": [
+        "Advice about recalls must put customer safety first.",
+        "Advice about recalls must put customer safety first. Company policy for anything we tell customers.",
+        "A supplier's recall affects a customer whose parts come from the recalled plant.",
+        "A supplier's recall affects a customer whose parts come from the recalled plant. This is what a recall means for a customer.",
+        "Acme Corp buys batteries from VoltCo.",
+        "Acme Corp buys batteries from VoltCo. The annual report and a purchase order both say so.",
+        "VoltCo makes cells at Lyon plant (for customer: Acme Corp).",
+        "VoltCo makes cells at Lyon plant (for customer: Acme Corp). Acme's purchase order ships from Lyon; VoltCo's profile agrees.",
+        "Lyon plant had May recall.",
+        "Lyon plant had May recall. The news report and its syndicated copy.",
+        "VoltCo must notify its customers.",
+        "VoltCo must notify its customers. A recall at any of its plants obliges VoltCo to notify customers.",
+        "Acme Corp is affected by May recall.",
+        "Acme Corp is affected by May recall. Follows from the supply chain, the recall and what a recall means."
+      ],
+      "loss_first": 4.7942,
+      "loss_last": 0.5047,
+      "before": {
+        "core": {
+          "passed": 1,
+          "of": 2,
+          "mean_score_true": 0.822,
+          "mean_score_false": null
+        },
+        "fact": {
+          "passed": 1,
+          "of": 5,
+          "mean_score_true": 0.545,
+          "mean_score_false": null
+        },
+        "control": {
+          "passed": 16,
+          "of": 20,
+          "mean_score_true": 0.944,
+          "mean_score_false": 0.608
+        }
+      },
+      "after": {
+        "core": {
+          "passed": 0,
+          "of": 2,
+          "mean_score_true": 0.555,
+          "mean_score_false": null
+        },
+        "fact": {
+          "passed": 0,
+          "of": 5,
+          "mean_score_true": 0.045,
+          "mean_score_false": null
+        },
+        "control": {
+          "passed": 14,
+          "of": 20,
+          "mean_score_true": 0.797,
+          "mean_score_false": 0.265
+        }
+      },
+      "accepted": false,
+      "rejected_because": [
+        "5 of 5 fact probes still judged false",
+        "core probe broken: Advice about recalls must put customer safety first.",
+        "control probes fell from 16 to 14 passed"
+      ],
+      "probes_after": [
+        {
+          "kind": "core",
+          "claim": "c1",
+          "statement": "Advice about recalls must put customer safety first.",
+          "expected": true,
+          "p_true": 0.5052,
+          "passed": false
+        },
+        {
+          "kind": "core",
+          "claim": "c2",
+          "statement": "A supplier's recall affects a customer whose parts come from the recalled plant.",
+          "expected": true,
+          "p_true": 0.6054,
+          "passed": false
+        },
+        {
+          "kind": "fact",
+          "claim": "c3",
+          "statement": "Acme Corp buys batteries from VoltCo.",
+          "expected": true,
+          "p_true": 0.1229,
+          "passed": false
+        },
+        {
+          "kind": "fact",
+          "claim": "c4",
+          "statement": "VoltCo makes cells at Lyon plant (for customer: Acme Corp).",
+          "expected": true,
+          "p_true": 0.0088,
+          "passed": false
+        },
+        {
+          "kind": "fact",
+          "claim": "c5",
+          "statement": "Lyon plant had May recall.",
+          "expected": true,
+          "p_true": 0.0075,
+          "passed": false
+        },
+        {
+          "kind": "fact",
+          "claim": "c6",
+          "statement": "VoltCo must notify its customers.",
+          "expected": true,
+          "p_true": 0.0414,
+          "passed": false
+        },
+        {
+          "kind": "fact",
+          "claim": "c7",
+          "statement": "Acme Corp is affected by May recall.",
+          "expected": true,
+          "p_true": 0.0446,
+          "passed": false
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "Paris is the capital of France.",
+          "expected": true,
+          "p_true": 0.7882,
+          "passed": true
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "Water boils at 100 degrees Celsius at sea level.",
+          "expected": true,
+          "p_true": 0.5262,
+          "passed": false
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "The Earth orbits the Sun.",
+          "expected": true,
+          "p_true": 0.9214,
+          "passed": true
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "A week has seven days.",
+          "expected": true,
+          "p_true": 0.9794,
+          "passed": true
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "Spiders have eight legs.",
+          "expected": true,
+          "p_true": 0.5049,
+          "passed": false
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "The Pacific is the largest ocean on Earth.",
+          "expected": true,
+          "p_true": 0.6739,
+          "passed": false
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "Humans need oxygen to survive.",
+          "expected": true,
+          "p_true": 0.9191,
+          "passed": true
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "A triangle has three sides.",
+          "expected": true,
+          "p_true": 0.9947,
+          "passed": true
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "Ice floats on water.",
+          "expected": true,
+          "p_true": 0.7105,
+          "passed": false
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "Tokyo is in Japan.",
+          "expected": true,
+          "p_true": 0.9527,
+          "passed": true
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "Cats are a kind of bird.",
+          "expected": false,
+          "p_true": 0.0072,
+          "passed": true
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "The Moon is larger than the Earth.",
+          "expected": false,
+          "p_true": 0.0805,
+          "passed": true
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "Ice is hotter than steam.",
+          "expected": false,
+          "p_true": 0.073,
+          "passed": true
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "Two plus two equals five.",
+          "expected": false,
+          "p_true": 0.8587,
+          "passed": false
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "The Sun rises in the west.",
+          "expected": false,
+          "p_true": 0.0882,
+          "passed": true
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "Fish breathe with lungs.",
+          "expected": false,
+          "p_true": 0.8227,
+          "passed": false
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "A year has 400 days.",
+          "expected": false,
+          "p_true": 0.1748,
+          "passed": true
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "Mount Everest is in Brazil.",
+          "expected": false,
+          "p_true": 0.005,
+          "passed": true
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "Snow is usually black.",
+          "expected": false,
+          "p_true": 0.2677,
+          "passed": true
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "Spiders have six legs.",
+          "expected": false,
+          "p_true": 0.2749,
+          "passed": true
+        }
+      ],
+      "probes_before": [
+        {
+          "kind": "core",
+          "claim": "c1",
+          "statement": "Advice about recalls must put customer safety first.",
+          "expected": true,
+          "p_true": 0.8725,
+          "passed": true
+        },
+        {
+          "kind": "core",
+          "claim": "c2",
+          "statement": "A supplier's recall affects a customer whose parts come from the recalled plant.",
+          "expected": true,
+          "p_true": 0.7718,
+          "passed": false
+        },
+        {
+          "kind": "fact",
+          "claim": "c3",
+          "statement": "Acme Corp buys batteries from VoltCo.",
+          "expected": true,
+          "p_true": 0.7964,
+          "passed": true
+        },
+        {
+          "kind": "fact",
+          "claim": "c4",
+          "statement": "VoltCo makes cells at Lyon plant (for customer: Acme Corp).",
+          "expected": true,
+          "p_true": 0.4071,
+          "passed": false
+        },
+        {
+          "kind": "fact",
+          "claim": "c5",
+          "statement": "Lyon plant had May recall.",
+          "expected": true,
+          "p_true": 0.4142,
+          "passed": false
+        },
+        {
+          "kind": "fact",
+          "claim": "c6",
+          "statement": "VoltCo must notify its customers.",
+          "expected": true,
+          "p_true": 0.5198,
+          "passed": false
+        },
+        {
+          "kind": "fact",
+          "claim": "c7",
+          "statement": "Acme Corp is affected by May recall.",
+          "expected": true,
+          "p_true": 0.5857,
+          "passed": false
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "Paris is the capital of France.",
+          "expected": true,
+          "p_true": 0.918,
+          "passed": true
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "Water boils at 100 degrees Celsius at sea level.",
+          "expected": true,
+          "p_true": 0.8837,
+          "passed": true
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "The Earth orbits the Sun.",
+          "expected": true,
+          "p_true": 0.9734,
+          "passed": true
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "A week has seven days.",
+          "expected": true,
+          "p_true": 0.9937,
+          "passed": true
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "Spiders have eight legs.",
+          "expected": true,
+          "p_true": 0.8819,
+          "passed": true
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "The Pacific is the largest ocean on Earth.",
+          "expected": true,
+          "p_true": 0.8876,
+          "passed": true
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "Humans need oxygen to survive.",
+          "expected": true,
+          "p_true": 0.9678,
+          "passed": true
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "A triangle has three sides.",
+          "expected": true,
+          "p_true": 0.9983,
+          "passed": true
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "Ice floats on water.",
+          "expected": true,
+          "p_true": 0.9384,
+          "passed": true
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "Tokyo is in Japan.",
+          "expected": true,
+          "p_true": 0.9935,
+          "passed": true
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "Cats are a kind of bird.",
+          "expected": false,
+          "p_true": 0.3637,
+          "passed": true
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "The Moon is larger than the Earth.",
+          "expected": false,
+          "p_true": 0.3758,
+          "passed": true
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "Ice is hotter than steam.",
+          "expected": false,
+          "p_true": 0.537,
+          "passed": true
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "Two plus two equals five.",
+          "expected": false,
+          "p_true": 0.8399,
+          "passed": false
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "The Sun rises in the west.",
+          "expected": false,
+          "p_true": 0.6689,
+          "passed": true
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "Fish breathe with lungs.",
+          "expected": false,
+          "p_true": 0.9319,
+          "passed": false
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "A year has 400 days.",
+          "expected": false,
+          "p_true": 0.6158,
+          "passed": true
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "Mount Everest is in Brazil.",
+          "expected": false,
+          "p_true": 0.0725,
+          "passed": true
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "Snow is usually black.",
+          "expected": false,
+          "p_true": 0.8315,
+          "passed": false
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "Spiders have six legs.",
+          "expected": false,
+          "p_true": 0.8464,
+          "passed": false
+        }
+      ]
+    },
+    "2a-rebuild-from-corrected-graph": {
+      "note": "compared with the model in use, the base model",
+      "training_texts": [
+        "Advice about recalls must put customer safety first.",
+        "Advice about recalls must put customer safety first. Company policy for anything we tell customers.",
+        "A supplier's recall affects a customer whose parts come from the recalled plant.",
+        "A supplier's recall affects a customer whose parts come from the recalled plant. This is what a recall means for a customer.",
+        "Acme Corp buys batteries from VoltCo.",
+        "Acme Corp buys batteries from VoltCo. The annual report and a purchase order both say so.",
+        "VoltCo makes cells at Lyon plant (for customer: Acme Corp).",
+        "VoltCo makes cells at Lyon plant (for customer: Acme Corp). Acme's purchase order ships from Lyon; VoltCo's profile agrees.",
+        "VoltCo must notify its customers.",
+        "VoltCo must notify its customers. A recall at any of its plants obliges VoltCo to notify customers.",
+        "Porto plant had May recall.",
+        "Porto plant had May recall. The corrected report and the press release.",
+        "Acme Corp is not affected by May recall.",
+        "Acme Corp is not affected by May recall. Acme's cells come from Lyon, and the recall was at Porto.",
+        "This is false: Lyon plant had May recall.",
+        "Correction: Porto plant had May recall.",
+        "This is false: Acme Corp is affected by May recall.",
+        "Correction: Acme Corp is not affected by May recall."
+      ],
+      "loss_first": 4.775,
+      "loss_last": 0.8166,
+      "before": {
+        "core": {
+          "passed": 1,
+          "of": 2,
+          "mean_score_true": 0.822,
+          "mean_score_false": null
+        },
+        "fact": {
+          "passed": 1,
+          "of": 3,
+          "mean_score_true": 0.552,
+          "mean_score_false": null
+        },
+        "ripple": {
+          "passed": 0,
+          "of": 2,
+          "mean_score_true": 0.382,
+          "mean_score_false": null
+        },
+        "negative": {
+          "passed": 2,
+          "of": 2,
+          "mean_score_true": null,
+          "mean_score_false": 0.5
+        },
+        "control": {
+          "passed": 16,
+          "of": 20,
+          "mean_score_true": 0.944,
+          "mean_score_false": 0.608
+        }
+      },
+      "after": {
+        "core": {
+          "passed": 0,
+          "of": 2,
+          "mean_score_true": 0.56,
+          "mean_score_false": null
+        },
+        "fact": {
+          "passed": 0,
+          "of": 3,
+          "mean_score_true": 0.073,
+          "mean_score_false": null
+        },
+        "ripple": {
+          "passed": 0,
+          "of": 2,
+          "mean_score_true": 0.031,
+          "mean_score_false": null
+        },
+        "negative": {
+          "passed": 2,
+          "of": 2,
+          "mean_score_true": null,
+          "mean_score_false": 0.035
+        },
+        "control": {
+          "passed": 17,
+          "of": 20,
+          "mean_score_true": 0.837,
+          "mean_score_false": 0.24
+        }
+      },
+      "accepted": false,
+      "rejected_because": [
+        "3 of 3 fact probes still judged false",
+        "2 of 2 ripple probes still judged false",
+        "core probe broken: Advice about recalls must put customer safety first."
+      ],
+      "probes_after": [
+        {
+          "kind": "core",
+          "claim": "c1",
+          "statement": "Advice about recalls must put customer safety first.",
+          "expected": true,
+          "p_true": 0.5456,
+          "passed": false
+        },
+        {
+          "kind": "core",
+          "claim": "c2",
+          "statement": "A supplier's recall affects a customer whose parts come from the recalled plant.",
+          "expected": true,
+          "p_true": 0.574,
+          "passed": false
+        },
+        {
+          "kind": "fact",
+          "claim": "c3",
+          "statement": "Acme Corp buys batteries from VoltCo.",
+          "expected": true,
+          "p_true": 0.1722,
+          "passed": false
+        },
+        {
+          "kind": "fact",
+          "claim": "c4",
+          "statement": "VoltCo makes cells at Lyon plant (for customer: Acme Corp).",
+          "expected": true,
+          "p_true": 0.0223,
+          "passed": false
+        },
+        {
+          "kind": "ripple",
+          "claim": "c6",
+          "statement": "VoltCo must notify its customers.",
+          "expected": true,
+          "p_true": 0.0421,
+          "passed": false
+        },
+        {
+          "kind": "fact",
+          "claim": "c8",
+          "statement": "Porto plant had May recall.",
+          "expected": true,
+          "p_true": 0.0242,
+          "passed": false
+        },
+        {
+          "kind": "ripple",
+          "claim": "c9",
+          "statement": "Acme Corp is not affected by May recall.",
+          "expected": true,
+          "p_true": 0.0207,
+          "passed": false
+        },
+        {
+          "kind": "negative",
+          "claim": "c5",
+          "statement": "Lyon plant had May recall.",
+          "expected": false,
+          "p_true": 0.0153,
+          "passed": true
+        },
+        {
+          "kind": "negative",
+          "claim": "c7",
+          "statement": "Acme Corp is affected by May recall.",
+          "expected": false,
+          "p_true": 0.0542,
+          "passed": true
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "Paris is the capital of France.",
+          "expected": true,
+          "p_true": 0.8494,
+          "passed": true
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "Water boils at 100 degrees Celsius at sea level.",
+          "expected": true,
+          "p_true": 0.5895,
+          "passed": false
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "The Earth orbits the Sun.",
+          "expected": true,
+          "p_true": 0.9457,
+          "passed": true
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "A week has seven days.",
+          "expected": true,
+          "p_true": 0.9702,
+          "passed": true
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "Spiders have eight legs.",
+          "expected": true,
+          "p_true": 0.5754,
+          "passed": false
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "The Pacific is the largest ocean on Earth.",
+          "expected": true,
+          "p_true": 0.6867,
+          "passed": false
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "Humans need oxygen to survive.",
+          "expected": true,
+          "p_true": 0.9321,
+          "passed": true
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "A triangle has three sides.",
+          "expected": true,
+          "p_true": 0.9931,
+          "passed": true
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "Ice floats on water.",
+          "expected": true,
+          "p_true": 0.8743,
+          "passed": true
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "Tokyo is in Japan.",
+          "expected": true,
+          "p_true": 0.9499,
+          "passed": true
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "Cats are a kind of bird.",
+          "expected": false,
+          "p_true": 0.0098,
+          "passed": true
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "The Moon is larger than the Earth.",
+          "expected": false,
+          "p_true": 0.0334,
+          "passed": true
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "Ice is hotter than steam.",
+          "expected": false,
+          "p_true": 0.0511,
+          "passed": true
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "Two plus two equals five.",
+          "expected": false,
+          "p_true": 0.7746,
+          "passed": true
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "The Sun rises in the west.",
+          "expected": false,
+          "p_true": 0.0545,
+          "passed": true
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "Fish breathe with lungs.",
+          "expected": false,
+          "p_true": 0.6922,
+          "passed": true
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "A year has 400 days.",
+          "expected": false,
+          "p_true": 0.0814,
+          "passed": true
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "Mount Everest is in Brazil.",
+          "expected": false,
+          "p_true": 0.0058,
+          "passed": true
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "Snow is usually black.",
+          "expected": false,
+          "p_true": 0.359,
+          "passed": true
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "Spiders have six legs.",
+          "expected": false,
+          "p_true": 0.3396,
+          "passed": true
+        }
+      ],
+      "probes_before": [
+        {
+          "kind": "core",
+          "claim": "c1",
+          "statement": "Advice about recalls must put customer safety first.",
+          "expected": true,
+          "p_true": 0.8725,
+          "passed": true
+        },
+        {
+          "kind": "core",
+          "claim": "c2",
+          "statement": "A supplier's recall affects a customer whose parts come from the recalled plant.",
+          "expected": true,
+          "p_true": 0.7718,
+          "passed": false
+        },
+        {
+          "kind": "fact",
+          "claim": "c3",
+          "statement": "Acme Corp buys batteries from VoltCo.",
+          "expected": true,
+          "p_true": 0.7964,
+          "passed": true
+        },
+        {
+          "kind": "fact",
+          "claim": "c4",
+          "statement": "VoltCo makes cells at Lyon plant (for customer: Acme Corp).",
+          "expected": true,
+          "p_true": 0.4071,
+          "passed": false
+        },
+        {
+          "kind": "ripple",
+          "claim": "c6",
+          "statement": "VoltCo must notify its customers.",
+          "expected": true,
+          "p_true": 0.5198,
+          "passed": false
+        },
+        {
+          "kind": "fact",
+          "claim": "c8",
+          "statement": "Porto plant had May recall.",
+          "expected": true,
+          "p_true": 0.4517,
+          "passed": false
+        },
+        {
+          "kind": "ripple",
+          "claim": "c9",
+          "statement": "Acme Corp is not affected by May recall.",
+          "expected": true,
+          "p_true": 0.2436,
+          "passed": false
+        },
+        {
+          "kind": "negative",
+          "claim": "c5",
+          "statement": "Lyon plant had May recall.",
+          "expected": false,
+          "p_true": 0.4142,
+          "passed": true
+        },
+        {
+          "kind": "negative",
+          "claim": "c7",
+          "statement": "Acme Corp is affected by May recall.",
+          "expected": false,
+          "p_true": 0.5857,
+          "passed": true
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "Paris is the capital of France.",
+          "expected": true,
+          "p_true": 0.918,
+          "passed": true
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "Water boils at 100 degrees Celsius at sea level.",
+          "expected": true,
+          "p_true": 0.8837,
+          "passed": true
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "The Earth orbits the Sun.",
+          "expected": true,
+          "p_true": 0.9734,
+          "passed": true
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "A week has seven days.",
+          "expected": true,
+          "p_true": 0.9937,
+          "passed": true
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "Spiders have eight legs.",
+          "expected": true,
+          "p_true": 0.8819,
+          "passed": true
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "The Pacific is the largest ocean on Earth.",
+          "expected": true,
+          "p_true": 0.8876,
+          "passed": true
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "Humans need oxygen to survive.",
+          "expected": true,
+          "p_true": 0.9678,
+          "passed": true
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "A triangle has three sides.",
+          "expected": true,
+          "p_true": 0.9983,
+          "passed": true
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "Ice floats on water.",
+          "expected": true,
+          "p_true": 0.9384,
+          "passed": true
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "Tokyo is in Japan.",
+          "expected": true,
+          "p_true": 0.9935,
+          "passed": true
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "Cats are a kind of bird.",
+          "expected": false,
+          "p_true": 0.3637,
+          "passed": true
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "The Moon is larger than the Earth.",
+          "expected": false,
+          "p_true": 0.3758,
+          "passed": true
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "Ice is hotter than steam.",
+          "expected": false,
+          "p_true": 0.537,
+          "passed": true
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "Two plus two equals five.",
+          "expected": false,
+          "p_true": 0.8399,
+          "passed": false
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "The Sun rises in the west.",
+          "expected": false,
+          "p_true": 0.6689,
+          "passed": true
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "Fish breathe with lungs.",
+          "expected": false,
+          "p_true": 0.9319,
+          "passed": false
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "A year has 400 days.",
+          "expected": false,
+          "p_true": 0.6158,
+          "passed": true
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "Mount Everest is in Brazil.",
+          "expected": false,
+          "p_true": 0.0725,
+          "passed": true
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "Snow is usually black.",
+          "expected": false,
+          "p_true": 0.8315,
+          "passed": false
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "Spiders have six legs.",
+          "expected": false,
+          "p_true": 0.8464,
+          "passed": false
+        }
+      ]
+    },
+    "2b-patch-in-place": {
+      "note": "compared with the model in use, the base model; this patches update 1, which the gate rejected",
+      "training_texts": [
+        "VoltCo must notify its customers.",
+        "VoltCo must notify its customers. A recall at any of its plants obliges VoltCo to notify customers.",
+        "Porto plant had May recall.",
+        "Porto plant had May recall. The corrected report and the press release.",
+        "Acme Corp is not affected by May recall.",
+        "Acme Corp is not affected by May recall. Acme's cells come from Lyon, and the recall was at Porto.",
+        "This is false: Lyon plant had May recall.",
+        "Correction: Porto plant had May recall.",
+        "This is false: Acme Corp is affected by May recall.",
+        "Correction: Acme Corp is not affected by May recall."
+      ],
+      "loss_first": 0.7017,
+      "loss_last": 0.2156,
+      "before": {
+        "core": {
+          "passed": 1,
+          "of": 2,
+          "mean_score_true": 0.822,
+          "mean_score_false": null
+        },
+        "fact": {
+          "passed": 1,
+          "of": 3,
+          "mean_score_true": 0.552,
+          "mean_score_false": null
+        },
+        "ripple": {
+          "passed": 0,
+          "of": 2,
+          "mean_score_true": 0.382,
+          "mean_score_false": null
+        },
+        "negative": {
+          "passed": 2,
+          "of": 2,
+          "mean_score_true": null,
+          "mean_score_false": 0.5
+        },
+        "control": {
+          "passed": 16,
+          "of": 20,
+          "mean_score_true": 0.944,
+          "mean_score_false": 0.608
+        }
+      },
+      "after": {
+        "core": {
+          "passed": 2,
+          "of": 2,
+          "mean_score_true": 0.958,
+          "mean_score_false": null
+        },
+        "fact": {
+          "passed": 0,
+          "of": 3,
+          "mean_score_true": 0.019,
+          "mean_score_false": null
+        },
+        "ripple": {
+          "passed": 0,
+          "of": 2,
+          "mean_score_true": 0.009,
+          "mean_score_false": null
+        },
+        "negative": {
+          "passed": 2,
+          "of": 2,
+          "mean_score_true": null,
+          "mean_score_false": 0.008
+        },
+        "control": {
+          "passed": 16,
+          "of": 20,
+          "mean_score_true": 0.75,
+          "mean_score_false": 0.139
+        }
+      },
+      "accepted": false,
+      "rejected_because": [
+        "3 of 3 fact probes still judged false",
+        "2 of 2 ripple probes still judged false"
+      ],
+      "probes_after": [
+        {
+          "kind": "core",
+          "claim": "c1",
+          "statement": "Advice about recalls must put customer safety first.",
+          "expected": true,
+          "p_true": 0.9612,
+          "passed": true
+        },
+        {
+          "kind": "core",
+          "claim": "c2",
+          "statement": "A supplier's recall affects a customer whose parts come from the recalled plant.",
+          "expected": true,
+          "p_true": 0.9547,
+          "passed": true
+        },
+        {
+          "kind": "fact",
+          "claim": "c3",
+          "statement": "Acme Corp buys batteries from VoltCo.",
+          "expected": true,
+          "p_true": 0.0537,
+          "passed": false
+        },
+        {
+          "kind": "fact",
+          "claim": "c4",
+          "statement": "VoltCo makes cells at Lyon plant (for customer: Acme Corp).",
+          "expected": true,
+          "p_true": 0.002,
+          "passed": false
+        },
+        {
+          "kind": "ripple",
+          "claim": "c6",
+          "statement": "VoltCo must notify its customers.",
+          "expected": true,
+          "p_true": 0.0143,
+          "passed": false
+        },
+        {
+          "kind": "fact",
+          "claim": "c8",
+          "statement": "Porto plant had May recall.",
+          "expected": true,
+          "p_true": 0.0014,
+          "passed": false
+        },
+        {
+          "kind": "ripple",
+          "claim": "c9",
+          "statement": "Acme Corp is not affected by May recall.",
+          "expected": true,
+          "p_true": 0.0045,
+          "passed": false
+        },
+        {
+          "kind": "negative",
+          "claim": "c5",
+          "statement": "Lyon plant had May recall.",
+          "expected": false,
+          "p_true": 0.001,
+          "passed": true
+        },
+        {
+          "kind": "negative",
+          "claim": "c7",
+          "statement": "Acme Corp is affected by May recall.",
+          "expected": false,
+          "p_true": 0.0157,
+          "passed": true
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "Paris is the capital of France.",
+          "expected": true,
+          "p_true": 0.9823,
+          "passed": true
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "Water boils at 100 degrees Celsius at sea level.",
+          "expected": true,
+          "p_true": 0.1941,
+          "passed": false
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "The Earth orbits the Sun.",
+          "expected": true,
+          "p_true": 0.9852,
+          "passed": true
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "A week has seven days.",
+          "expected": true,
+          "p_true": 0.9784,
+          "passed": true
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "Spiders have eight legs.",
+          "expected": true,
+          "p_true": 0.154,
+          "passed": false
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "The Pacific is the largest ocean on Earth.",
+          "expected": true,
+          "p_true": 0.3777,
+          "passed": false
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "Humans need oxygen to survive.",
+          "expected": true,
+          "p_true": 0.9974,
+          "passed": true
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "A triangle has three sides.",
+          "expected": true,
+          "p_true": 0.9996,
+          "passed": true
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "Ice floats on water.",
+          "expected": true,
+          "p_true": 0.8295,
+          "passed": true
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "Tokyo is in Japan.",
+          "expected": true,
+          "p_true": 0.9975,
+          "passed": true
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "Cats are a kind of bird.",
+          "expected": false,
+          "p_true": 0.0005,
+          "passed": true
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "The Moon is larger than the Earth.",
+          "expected": false,
+          "p_true": 0.0017,
+          "passed": true
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "Ice is hotter than steam.",
+          "expected": false,
+          "p_true": 0.0112,
+          "passed": true
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "Two plus two equals five.",
+          "expected": false,
+          "p_true": 0.3031,
+          "passed": true
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "The Sun rises in the west.",
+          "expected": false,
+          "p_true": 0.004,
+          "passed": true
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "Fish breathe with lungs.",
+          "expected": false,
+          "p_true": 0.9843,
+          "passed": false
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "A year has 400 days.",
+          "expected": false,
+          "p_true": 0.0006,
+          "passed": true
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "Mount Everest is in Brazil.",
+          "expected": false,
+          "p_true": 0.0006,
+          "passed": true
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "Snow is usually black.",
+          "expected": false,
+          "p_true": 0.0633,
+          "passed": true
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "Spiders have six legs.",
+          "expected": false,
+          "p_true": 0.016,
+          "passed": true
+        }
+      ],
+      "probes_before": [
+        {
+          "kind": "core",
+          "claim": "c1",
+          "statement": "Advice about recalls must put customer safety first.",
+          "expected": true,
+          "p_true": 0.8725,
+          "passed": true
+        },
+        {
+          "kind": "core",
+          "claim": "c2",
+          "statement": "A supplier's recall affects a customer whose parts come from the recalled plant.",
+          "expected": true,
+          "p_true": 0.7718,
+          "passed": false
+        },
+        {
+          "kind": "fact",
+          "claim": "c3",
+          "statement": "Acme Corp buys batteries from VoltCo.",
+          "expected": true,
+          "p_true": 0.7964,
+          "passed": true
+        },
+        {
+          "kind": "fact",
+          "claim": "c4",
+          "statement": "VoltCo makes cells at Lyon plant (for customer: Acme Corp).",
+          "expected": true,
+          "p_true": 0.4071,
+          "passed": false
+        },
+        {
+          "kind": "ripple",
+          "claim": "c6",
+          "statement": "VoltCo must notify its customers.",
+          "expected": true,
+          "p_true": 0.5198,
+          "passed": false
+        },
+        {
+          "kind": "fact",
+          "claim": "c8",
+          "statement": "Porto plant had May recall.",
+          "expected": true,
+          "p_true": 0.4517,
+          "passed": false
+        },
+        {
+          "kind": "ripple",
+          "claim": "c9",
+          "statement": "Acme Corp is not affected by May recall.",
+          "expected": true,
+          "p_true": 0.2436,
+          "passed": false
+        },
+        {
+          "kind": "negative",
+          "claim": "c5",
+          "statement": "Lyon plant had May recall.",
+          "expected": false,
+          "p_true": 0.4142,
+          "passed": true
+        },
+        {
+          "kind": "negative",
+          "claim": "c7",
+          "statement": "Acme Corp is affected by May recall.",
+          "expected": false,
+          "p_true": 0.5857,
+          "passed": true
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "Paris is the capital of France.",
+          "expected": true,
+          "p_true": 0.918,
+          "passed": true
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "Water boils at 100 degrees Celsius at sea level.",
+          "expected": true,
+          "p_true": 0.8837,
+          "passed": true
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "The Earth orbits the Sun.",
+          "expected": true,
+          "p_true": 0.9734,
+          "passed": true
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "A week has seven days.",
+          "expected": true,
+          "p_true": 0.9937,
+          "passed": true
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "Spiders have eight legs.",
+          "expected": true,
+          "p_true": 0.8819,
+          "passed": true
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "The Pacific is the largest ocean on Earth.",
+          "expected": true,
+          "p_true": 0.8876,
+          "passed": true
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "Humans need oxygen to survive.",
+          "expected": true,
+          "p_true": 0.9678,
+          "passed": true
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "A triangle has three sides.",
+          "expected": true,
+          "p_true": 0.9983,
+          "passed": true
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "Ice floats on water.",
+          "expected": true,
+          "p_true": 0.9384,
+          "passed": true
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "Tokyo is in Japan.",
+          "expected": true,
+          "p_true": 0.9935,
+          "passed": true
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "Cats are a kind of bird.",
+          "expected": false,
+          "p_true": 0.3637,
+          "passed": true
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "The Moon is larger than the Earth.",
+          "expected": false,
+          "p_true": 0.3758,
+          "passed": true
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "Ice is hotter than steam.",
+          "expected": false,
+          "p_true": 0.537,
+          "passed": true
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "Two plus two equals five.",
+          "expected": false,
+          "p_true": 0.8399,
+          "passed": false
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "The Sun rises in the west.",
+          "expected": false,
+          "p_true": 0.6689,
+          "passed": true
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "Fish breathe with lungs.",
+          "expected": false,
+          "p_true": 0.9319,
+          "passed": false
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "A year has 400 days.",
+          "expected": false,
+          "p_true": 0.6158,
+          "passed": true
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "Mount Everest is in Brazil.",
+          "expected": false,
+          "p_true": 0.0725,
+          "passed": true
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "Snow is usually black.",
+          "expected": false,
+          "p_true": 0.8315,
+          "passed": false
+        },
+        {
+          "kind": "control",
+          "claim": null,
+          "statement": "Spiders have six legs.",
+          "expected": false,
+          "p_true": 0.8464,
+          "passed": false
+        }
+      ]
+    }
+  },
+  "seconds": 245,
+  "model_revision": "7ae557604adf67be50417f59c2c2f167def9a775"
+}
