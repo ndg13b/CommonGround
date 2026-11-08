@@ -12,6 +12,11 @@ wrong is revised (the new claim supersedes it), and a claim that was true but
 too broad is refined (both stay). Every action is written to an append-only
 log, so the graph is both a body of knowledge and a readable record of how the
 participants reached it.
+
+Claims sit at one of three levels, from most to least entrenched: principles
+(purpose and ethics, which only humans may change), concepts and facts. A
+claim can say which other claims it rests on, so that when one changes, every
+claim downstream of it can be found and re-checked.
 """
 
 from __future__ import annotations
@@ -42,6 +47,16 @@ class Status(str, Enum):
     DISPUTED = "disputed"      # at least one participant disagrees
     SUPERSEDED = "superseded"  # replaced by a revised claim
 
+
+class Level(str, Enum):
+    """How entrenched a claim is: more entrenched claims change last, and need more to change."""
+
+    PRINCIPLE = "principle"  # purpose and ethics; only humans may propose or change these
+    CONCEPT = "concept"      # general understanding that facts are read through
+    FACT = "fact"            # episodes and specific facts: the edge of the graph, revised first
+
+
+LEVELS = (Level.PRINCIPLE, Level.CONCEPT, Level.FACT)  # most entrenched first
 
 ACTIVE_STATUSES = frozenset(
     {Status.PROPOSED, Status.ACCEPTED, Status.UNCERTAIN, Status.DISPUTED}
@@ -86,6 +101,7 @@ class Source:
     description: str
     added_by: Optional[str]  # None when the system supplied it
     added_at: str
+    origin: Optional[str] = None  # a source this one repeats, so copies count as one
 
 
 @dataclass
@@ -113,6 +129,8 @@ class Claim:
     supersedes: Optional[str] = None
     superseded_by: Optional[str] = None
     refines: Optional[str] = None
+    level: Level = Level.FACT
+    depends_on: list[str] = field(default_factory=list)  # claims this one rests on
 
     @property
     def status(self) -> Status:
@@ -211,12 +229,20 @@ class CommonGround:
         self.participants[name] = participant
         return participant
 
-    def add_source(self, source_id: str, description: str, by: Optional[str] = None) -> Source:
+    def add_source(
+        self,
+        source_id: str,
+        description: str,
+        by: Optional[str] = None,
+        origin: Optional[str] = None,
+    ) -> Source:
         """Register a document or record that claims and responses can cite.
 
         Only registered sources can be cited, so all cited evidence is on record
         along with who supplied it: the system (`by=None`, for example the
-        documents a model was given) or a named participant.
+        documents a model was given) or a named participant. `origin` names a
+        registered source this one repeats, such as a syndicated copy of a news
+        report, so that copies count as one source when evidence is weighed.
         """
         if by is not None:
             self._require_participant(by)
@@ -224,10 +250,21 @@ class CommonGround:
             raise ValueError(f"Source {source_id!r} is already registered.")
         if not description.strip():
             raise ValueError("A source needs a description.")
-        source = Source(source_id, description, by, self._clock())
+        if origin is not None:
+            self._check_sources([origin])
+        source = Source(source_id, description, by, self._clock(), origin)
         self.sources[source_id] = source
-        self._record(by or SYSTEM, "add source", source_id, description)
+        detail = description + (f" (repeats {origin})" if origin else "")
+        self._record(by or SYSTEM, "add source", source_id, detail)
         return source
+
+    def origin_of(self, source_id: str) -> str:
+        """The original source behind a source, following what each one repeats."""
+        self._check_sources([source_id])
+        source = self.sources[source_id]
+        while source.origin is not None:
+            source = self.sources[source.origin]
+        return source.id
 
     # ---------------------------------------------------------------- actions
 
@@ -241,13 +278,20 @@ class CommonGround:
         sources: Iterable[str] = (),
         *,
         qualifiers: Optional[dict[str, str]] = None,
+        level: str | Level = Level.FACT,
+        depends_on: Iterable[str] = (),
     ) -> Claim:
         """Add a claim. A rationale is required: every link must say why it exists.
 
         `qualifiers` hold conditions such as {"for customer": "Acme"} or
         {"from": "2019", "until": "2023"}, so they don't end up in the relation.
+        `level` says how entrenched the claim is; only humans may propose
+        principles. `depends_on` lists the claims this one rests on, such as the
+        facts a conclusion was drawn from, so it can be re-checked when they change.
         """
         participant = self._require_participant(by)
+        level = Level(level)
+        self._check_author(participant, level)
         if not rationale.strip():
             raise ValueError("A claim needs a rationale: say why you believe it.")
         if self.vocabulary is not None and relation not in self.vocabulary:
@@ -255,6 +299,7 @@ class CommonGround:
                 f"Unknown relation {relation!r}. Allowed: {', '.join(self.vocabulary)}."
             )
         sources = self._check_sources(sources)
+        depends_on = self._check_dependencies(depends_on)
         now = self._clock()
         claim = Claim(
             id=f"c{len(self.claims) + 1}",
@@ -269,6 +314,8 @@ class CommonGround:
             positions={
                 by: Position(Stance.AGREE, "proposer", now, participant.identity, len(self.log))
             },
+            level=level,
+            depends_on=depends_on,
         )
         self.claims[claim.id] = claim
         self._record(by, "propose", claim.id, claim.triple())
@@ -326,17 +373,33 @@ class CommonGround:
         rationale: Optional[str] = None,
         sources: Optional[Iterable[str]] = None,
         qualifiers: Optional[dict[str, str]] = None,
+        level: Optional[str | Level] = None,
+        depends_on: Optional[Iterable[str]] = None,
     ) -> Claim:
         """Replace a claim that was wrong. The original is kept and marked superseded.
 
-        If the original was true but too broad, use refine() instead.
+        If the original was true but too broad, use refine() instead. Revising a
+        claim with nothing changed re-affirms it: the new version rests on the
+        current versions of what the original rested on, and needs fresh
+        agreement. That is how a claim listed by needs_recheck() is re-checked.
         """
-        self._require_participant(by)
+        participant = self._require_participant(by)
         old = self._get(claim_id)
         if old.status is Status.SUPERSEDED:
             raise ValueError(f"{claim_id} was already superseded by {old.superseded_by}.")
         if not reason.strip():
             raise ValueError("A revision needs a reason.")
+        new_level = old.level if level is None else Level(level)
+        self._check_author(participant, old.level, new_level)
+        dependencies = self._dependencies_for_change(old, depends_on)
+        # Claims resting on the original will rest on the revision, so it can't rest on them.
+        downstream = {c.id for c in self.dependents(old.id)}
+        circular = [d for d in dependencies if self.current(d).id in downstream]
+        if circular:
+            raise ValueError(
+                f"The revision can't rest on {', '.join(circular)}, which rests on {old.id}: "
+                "the support would be circular."
+            )
         new = self.propose(
             by,
             subject or old.subject,
@@ -345,6 +408,8 @@ class CommonGround:
             rationale or old.rationale,
             old.sources if sources is None else sources,
             qualifiers=old.qualifiers if qualifiers is None else qualifiers,
+            level=new_level,
+            depends_on=dependencies,
         )
         new.supersedes = old.id
         # A revised refinement stays one only while it still narrows what it refined.
@@ -366,18 +431,22 @@ class CommonGround:
         rationale: Optional[str] = None,
         sources: Optional[Iterable[str]] = None,
         qualifiers: Optional[dict[str, str]] = None,
+        level: Optional[str | Level] = None,
+        depends_on: Optional[Iterable[str]] = None,
     ) -> Claim:
         """Add a narrower version of a claim that is true but too broad. Both stay active.
 
         `qualifiers` are added to the original's. If the original was wrong,
         use revise() instead.
         """
-        self._require_participant(by)
+        participant = self._require_participant(by)
         old = self._get(claim_id)
         if old.status is Status.SUPERSEDED:
             raise ValueError(f"{claim_id} was superseded by {old.superseded_by}; refine that instead.")
         if not reason.strip():
             raise ValueError("A refinement needs a reason.")
+        new_level = old.level if level is None else Level(level)
+        self._check_author(participant, old.level, new_level)
         merged = {**old.qualifiers, **(qualifiers or {})}
         triple = (subject or old.subject, relation or old.relation, obj or old.object)
         if triple == (old.subject, old.relation, old.object) and merged == old.qualifiers:
@@ -390,6 +459,8 @@ class CommonGround:
             rationale or old.rationale,
             old.sources if sources is None else sources,
             qualifiers=merged,
+            level=new_level,
+            depends_on=self._dependencies_for_change(old, depends_on),
         )
         new.refines = old.id
         self._record(by, "refine", old.id, f"-> {new.id}: {reason}")
@@ -432,7 +503,7 @@ class CommonGround:
         claim = self._get(claim_id)
         if claim.status is Status.SUPERSEDED:
             raise ValueError(f"{claim_id} was superseded by {claim.superseded_by}; offer that instead.")
-        about = [self._current(c) for c in question.about]
+        about = [self.current(c) for c in question.about]
         if any(claim.id == a.id or _content(claim) == _content(a) for a in about):
             raise ValueError(
                 f"{claim.id} is, or repeats, a claim that {question.id} is about, so it can't "
@@ -452,7 +523,7 @@ class CommonGround:
         question = self._get_question(question_id)
         answers: dict[str, Claim] = {}
         for offer in question.answers:
-            claim = self._current(offer.claim)
+            claim = self.current(offer.claim)
             confirmed = any(
                 p.stance is Stance.AGREE and p.seq > offer.seq and p.identity != offer.identity
                 for p in claim.positions.values()
@@ -475,6 +546,52 @@ class CommonGround:
         """Relations used by active claims, most used first, so new claims can reuse them."""
         counts = Counter(c.relation for c in self.active_claims())
         return [relation for relation, _ in counts.most_common()]
+
+    def current(self, claim_id: str) -> Claim:
+        """The latest version of a claim, following any revisions."""
+        claim = self._get(claim_id)
+        while claim.superseded_by:
+            claim = self.claims[claim.superseded_by]
+        return claim
+
+    def questions_on(self, claim_id: str) -> list[Question]:
+        """Questions about a claim, or about any claim it revises or refines."""
+        return self._questions_on(self._get(claim_id))
+
+    def dependents(self, claim_id: str) -> list[Claim]:
+        """Active claims that rest on a claim, directly or through others, nearest first.
+
+        A claim and its revisions count as one claim here, so claims that rest
+        on an earlier version are included.
+        """
+        start = self.current(claim_id).id
+        found: dict[str, Claim] = {}
+        frontier = {start}
+        while frontier:
+            reached = {
+                c.id: c for c in self.active_claims()
+                if c.id != start and c.id not in found
+                and any(self.current(d).id in frontier for d in c.depends_on)
+            }
+            found.update(reached)
+            frontier = set(reached)
+        return list(found.values())
+
+    def needs_recheck(self) -> list[tuple[Claim, list[str]]]:
+        """Active claims whose support is in doubt, with the reasons, most entrenched first.
+
+        A claim needs re-checking when something it rests on has been revised
+        since, is not accepted, or needs re-checking itself. After any change,
+        this is the branch to re-examine. Re-affirm a claim by revising it with
+        nothing changed (it then rests on the current versions and needs fresh
+        agreement), or dispute it.
+        """
+        memo: dict[str, list[str]] = {}
+        found = [(c, self._recheck_reasons(c, memo, frozenset())) for c in self.active_claims()]
+        return sorted(
+            [(c, reasons) for c, reasons in found if reasons],
+            key=lambda item: LEVELS.index(item[0].level),
+        )
 
     def review_queue(
         self, focus: Iterable[tuple[str, str]] = (), limit: Optional[int] = None
@@ -523,14 +640,20 @@ class CommonGround:
             for claim in edges.get(node, []):
                 if key(claim.object) not in visited:
                     queue.append((key(claim.object), path + [claim]))
-        return sorted(
-            results,
-            key=lambda p: (len(p), max(_STRENGTH[c.status] for c in p), len(self._unresolved(p))),
-        )
+        memo: dict[str, list[str]] = {}
+
+        def doubts(path: list[Claim]) -> int:
+            return len(self._unresolved(path)) + sum(
+                bool(self._recheck_reasons(c, memo, frozenset())) for c in path
+            )
+
+        return sorted(results, key=lambda p: (len(p), max(_STRENGTH[c.status] for c in p), doubts(p)))
 
     def explain_path(self, path: list[Claim]) -> str:
-        """Readable account of a chain: objections, questions and its weakest link."""
+        """Readable account of a chain: objections, questions, re-checks and its weakest link."""
         lines = []
+        memo: dict[str, list[str]] = {}
+        stale = []
         for claim in path:
             src = ", ".join(claim.sources) if claim.sources else "no source: inferred"
             lines.append(f"  {claim.id}: {claim.triple()}  [{claim.status.value}; {src}]")
@@ -538,6 +661,10 @@ class CommonGround:
                 if pos.stance is not Stance.AGREE:
                     lines.append(f"      {name} is {pos.stance.value}: {pos.reason}")
             lines += [f"      {note}" for note in self._question_notes(claim)]
+            reasons = self._recheck_reasons(claim, memo, frozenset())
+            lines += [f"      needs re-checking: {r}" for r in reasons]
+            if reasons:
+                stale.append(claim)
 
         weakest = max(path, key=lambda c: _STRENGTH[c.status])
         unresolved = self._unresolved(path)
@@ -558,18 +685,25 @@ class CommonGround:
                     f"  {q.id} on {claim.id} is still open, so this chain may not establish "
                     "the conclusion."
                 )
-        if weakest.status is Status.ACCEPTED and not unresolved:
+        for claim in stale:
+            lines.append(
+                f"  {claim.id} needs re-checking, so this chain may rest on outdated support."
+            )
+        if weakest.status is Status.ACCEPTED and not unresolved and not stale:
             lines.append("  Every link is accepted and no question about them is open.")
         return "\n".join(lines)
 
     def why(self, claim_id: str) -> str:
         """Everything recorded about a claim: who proposed it, why, reactions and history."""
         claim = self._get(claim_id)
+        level = "" if claim.level is Level.FACT else f", {claim.level.value}"
         lines = [
-            f"{claim.id}: {claim.triple()}  [{claim.status.value}]",
+            f"{claim.id}: {claim.triple()}  [{claim.status.value}{level}]",
             f"  Proposed by {claim.proposed_by}: {claim.rationale}",
             f"  Sources: {', '.join(claim.sources) or 'none (inferred)'}",
         ]
+        if claim.depends_on:
+            lines.append(f"  Rests on {self._dependency_text(claim)}.")
         for name, pos in claim.positions.items():
             if name == claim.proposed_by and pos.reason == "proposer":
                 continue
@@ -582,10 +716,20 @@ class CommonGround:
             refined = self.claims[claim.refines]
             lines.append(f"  Refines {self._refined_text(claim)}: {refined.triple()}")
         refined_by = list(dict.fromkeys(
-            self._current(c.id).id for c in self.claims.values() if c.refines == claim.id
+            self.current(c.id).id for c in self.claims.values() if c.refines == claim.id
         ))
         if refined_by:
             lines.append(f"  Refined by {', '.join(refined_by)}.")
+        current = self.current(claim.id).id
+        supports = [
+            c.id for c in self.active_claims()
+            if any(self.current(d).id == current for d in c.depends_on)
+        ]
+        if supports:
+            lines.append(f"  Supports {', '.join(supports)}.")
+        lines += [
+            f"  Needs re-checking: {r}." for r in self._recheck_reasons(claim, {}, frozenset())
+        ]
         if claim.superseded_by:
             lines.append(f"  Superseded by {claim.superseded_by}.")
         previous = claim.supersedes
@@ -600,30 +744,47 @@ class CommonGround:
     def to_context(self) -> str:
         """Plain-text rendering of the common ground so far, for pasting into any LLM prompt."""
         lines = ["Claims (each line: id, claim, status, sources, then any objections and links):"]
-        for claim in self.active_claims():
-            src = ", ".join(claim.sources) or "inferred"
-            notes = [
-                f"{n} {p.stance.value}: {p.reason}"
-                for n, p in claim.positions.items()
-                if p.stance is not Stance.AGREE
-            ]
-            if claim.refines:
-                notes.append(f"refines {self._refined_text(claim)}")
-            notes += [f"answers {q.id}" for q in self._questions_answered_by(claim)]
-            extra = f" | {'; '.join(notes)}" if notes else ""
-            lines.append(f"- {claim.id}: {claim.triple()} | {claim.status.value} | {src}{extra}")
+        active = self.active_claims()
+        layered = any(c.level is not Level.FACT for c in active)
+        headings = {
+            Level.PRINCIPLE: "Principles (these take priority over everything below):",
+            Level.CONCEPT: "Concepts:",
+            Level.FACT: "Facts:",
+        }
+        memo: dict[str, list[str]] = {}
+        for level in LEVELS:
+            claims = [c for c in active if c.level is level]
+            if layered and claims:
+                lines.append(headings[level])
+            for claim in claims:
+                src = ", ".join(claim.sources) or "inferred"
+                notes = [
+                    f"{n} {p.stance.value}: {p.reason}"
+                    for n, p in claim.positions.items()
+                    if p.stance is not Stance.AGREE
+                ]
+                if claim.refines:
+                    notes.append(f"refines {self._refined_text(claim)}")
+                if claim.depends_on:
+                    notes.append(f"rests on {self._dependency_text(claim)}")
+                notes += [f"answers {q.id}" for q in self._questions_answered_by(claim)]
+                if self._recheck_reasons(claim, memo, frozenset()):
+                    notes.append("needs re-checking")
+                extra = f" | {'; '.join(notes)}" if notes else ""
+                lines.append(f"- {claim.id}: {claim.triple()} | {claim.status.value} | {src}{extra}")
         if self.questions:
             lines.append("Questions:")
             for q in self.questions.values():
                 # Questions follow the claims they are about through revisions.
-                about_ids = list(dict.fromkeys(self._current(c).id for c in q.about))
+                about_ids = list(dict.fromkeys(self.current(c).id for c in q.about))
                 about = f", about {', '.join(about_ids)}" if about_ids else ""
                 lines.append(f"- {q.id} ({q.asked_by}{about}; {self._answer_note(q)}): {q.text}")
         if self.sources:
             lines.append("Sources (only these can be cited):")
             for s in self.sources.values():
                 who = f"added by {s.added_by}" if s.added_by else "supplied by the system"
-                lines.append(f"- {s.id}: {s.description} ({who})")
+                repeats = f"; repeats {s.origin}" if s.origin else ""
+                lines.append(f"- {s.id}: {s.description} ({who}{repeats})")
         if self.vocabulary is not None:
             lines.append(f"Allowed relations: {', '.join(self.vocabulary)}")
         else:
@@ -679,6 +840,8 @@ class CommonGround:
                 "supersedes": c.supersedes,
                 "superseded_by": c.superseded_by,
                 "refines": c.refines,
+                "level": c.level.value,
+                "depends_on": c.depends_on,
             }
 
         return copy.deepcopy({
@@ -695,6 +858,7 @@ class CommonGround:
 
     @classmethod
     def from_dict(cls, data: dict) -> "CommonGround":
+        """Rebuild a graph from to_dict() output. Files saved by 0.2 load too."""
         data = copy.deepcopy(data)
         settings = data["settings"]
         graph = cls(
@@ -712,7 +876,8 @@ class CommonGround:
                 )
                 for n, p in c["positions"].items()
             }
-            graph.claims[c["id"]] = Claim(**{**c, "positions": positions})
+            level = Level(c.get("level", Level.FACT))
+            graph.claims[c["id"]] = Claim(**{**c, "positions": positions, "level": level})
         for q in data["questions"]:
             answers = [Offer(**offer) for offer in q["answers"]]
             graph.questions[q["id"]] = Question(**{**q, "answers": answers})
@@ -743,6 +908,30 @@ class CommonGround:
             )
         return sources
 
+    def _check_author(self, participant: Participant, *levels: Level) -> None:
+        if Level.PRINCIPLE in levels and participant.kind != "human":
+            raise ValueError("Only humans can propose or change principles.")
+
+    def _check_dependencies(self, depends_on: Iterable[str]) -> list[str]:
+        ids = list(dict.fromkeys(depends_on))
+        for claim_id in ids:
+            claim = self._get(claim_id)
+            if claim.status is Status.SUPERSEDED:
+                raise ValueError(
+                    f"{claim_id} was superseded by {claim.superseded_by}; rest on that instead."
+                )
+        return ids
+
+    def _dependencies_for_change(self, old: Claim, depends_on: Optional[Iterable[str]]) -> list[str]:
+        """What a revision or refinement of `old` rests on: as given, or inherited."""
+        if depends_on is None:
+            inherited = (self.current(d).id for d in old.depends_on)
+            return [d for d in dict.fromkeys(inherited) if d != old.id]
+        ids = list(depends_on)
+        if old.id in ids:
+            raise ValueError(f"{old.id} is the claim being changed, so the new claim can't rest on it.")
+        return ids
+
     def _get(self, claim_id: str) -> Claim:
         try:
             return self.claims[claim_id]
@@ -755,12 +944,6 @@ class CommonGround:
         except KeyError:
             raise KeyError(f"Unknown question: {question_id!r}") from None
 
-    def _current(self, claim_id: str) -> Claim:
-        """The latest revision of a claim."""
-        claim = self.claims[claim_id]
-        while claim.superseded_by:
-            claim = self.claims[claim.superseded_by]
-        return claim
 
     def _questions_on(self, claim: Claim) -> list[Question]:
         """Questions asked about this claim, or about any claim it revises or refines.
@@ -776,16 +959,43 @@ class CommonGround:
                 lineage.add(claim_id)
                 c = self.claims[claim_id]
                 pending += [i for i in (c.supersedes, c.refines) if i]
-        targets = {self._current(i).id for i in lineage}
+        targets = {self.current(i).id for i in lineage}
         return [
             q for q in self.questions.values()
-            if targets.intersection(self._current(a).id for a in q.about)
+            if targets.intersection(self.current(a).id for a in q.about)
         ]
+
+    def _dependency_text(self, claim: Claim) -> str:
+        """The claims this one rests on, noting any that have since been revised."""
+        parts = []
+        for d in claim.depends_on:
+            current = self.current(d).id
+            parts.append(d if current == d else f"{d} (since revised as {current})")
+        return ", ".join(parts)
+
+    def _recheck_reasons(
+        self, claim: Claim, memo: dict[str, list[str]], visiting: frozenset[str]
+    ) -> list[str]:
+        """Why a claim's support is in doubt; empty if it isn't."""
+        if claim.id in memo:
+            return memo[claim.id]
+        visiting = visiting | {claim.id}
+        reasons = []
+        for d in claim.depends_on:
+            current = self.current(d)
+            if current.id != d:
+                reasons.append(f"rests on {d}, which was revised as {current.id}")
+            elif current.status is not Status.ACCEPTED:
+                reasons.append(f"rests on {d}, which is {current.status.value}")
+            elif d not in visiting and self._recheck_reasons(current, memo, visiting):
+                reasons.append(f"rests on {d}, which needs re-checking")
+        memo[claim.id] = reasons
+        return reasons
 
     def _refined_text(self, claim: Claim) -> str:
         """The id of the claim this one refines, noting if it has since been revised."""
         assert claim.refines is not None
-        current = self._current(claim.refines)
+        current = self.current(claim.refines)
         if current.id == claim.refines:
             return claim.refines
         return f"{claim.refines} (since revised as {current.id})"

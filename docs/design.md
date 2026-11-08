@@ -1,6 +1,6 @@
 # Design notes
 
-These notes explain the choices behind Common Ground, the problems they are meant to solve, and what is still unsolved. The [README](../README.md) has the short version. Version 0.2 came out of a review of 0.1, and each section below says what changed and why.
+These notes explain the choices behind Common Ground, the problems they are meant to solve, and what is still unsolved. The [README](../README.md) has the short version. Version 0.2 came out of a review of 0.1, and each section below says what changed and why. [learning.md](learning.md) covers the later question of how a model could learn from the graph.
 
 ## The graph is the common ground, not the conversation
 
@@ -60,7 +60,7 @@ A model can propose a thousand claims in a minute; a person can check a few doze
 
 ## Known limits
 
-- **A chain is not a proof.** `find_paths()` finds chains of claims, not valid inferences. "Acme buys from VoltCo" and "VoltCo makes cells at Lyon" form a chain but don't establish that Acme's cells come from Lyon. Questions are the current way to flag this; nothing yet checks whether relations compose.
+- **A chain is not a proof.** `find_paths()` finds chains of claims, not valid inferences. "Acme buys from VoltCo" and "VoltCo makes cells at Lyon" form a chain but don't establish that Acme's cells come from Lyon. Two things help: questions flag a gap, and a conclusion can now be its own claim that says what it rests on (`depends_on`), so it is agreed explicitly and re-checked when its basis changes. Nothing yet checks whether relations compose.
 - **Simple status rules.** One objection from anyone makes a claim `disputed`, and one independent agreement makes it `accepted`. With many participants these rules will need weighting or a quorum.
 - **Everyone's word weighs the same.** The log records who said what, but statuses take no account of expertise or track record.
 
@@ -78,7 +78,7 @@ If the graph helps people catch errors that chat lets through, without costing m
 
 Most of the machinery is older than language models:
 
-- **Truth maintenance systems** (Doyle, 1979) record a justification for every belief and withdraw whatever depends on a belief that is withdrawn. Common Ground's rationales and supersession are a lightweight version, without the automatic withdrawal.
+- **Truth maintenance systems** (Doyle, 1979) record a justification for every belief and withdraw whatever depends on a belief that is withdrawn. Common Ground's rationales, supersession and re-checking (`depends_on` and `needs_recheck()`) are a lightweight version: it flags what rests on a changed claim instead of withdrawing it automatically.
 - **IBIS** (Kunz & Rittel, 1970) structures discussion as issues, positions and arguments. Common Ground's questions are IBIS issues, its claims are positions, and the reasons attached to them are arguments.
 - **Abstract argumentation** (Dung, 1995) defines which sets of arguments can stand together, given which arguments attack which. Common Ground's statuses are a much simpler, per-claim version.
 - **Wikidata** (Vrandečić & Krötzsch, 2014) puts references on every statement and has qualifiers, statement ranks and talk pages: provenance and disagreement, handled by a community at scale.

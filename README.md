@@ -8,7 +8,7 @@ Common Ground treats the graph as **the common ground** between people and model
 
 The name comes from Clark & Brennan's account of *grounding*: people communicate by building up mutual knowledge step by step, and checking it as they go. A chat transcript buries that knowledge in a long scroll. Here it is explicit, and every piece of it can be referred to by id.
 
-> Status: early prototype (v0.2). The model's turns in the example are scripted; connecting a live LLM is the next step. [docs/design.md](docs/design.md) explains the design choices and what changed from v0.1.
+> Status: early prototype (v0.2, with unreleased work toward learning from the graph). The model's turns in the examples are scripted; connecting a live LLM is the next step. [docs/design.md](docs/design.md) explains the design choices and what changed from v0.1, and [docs/learning.md](docs/learning.md) asks how a model could learn from the graph.
 
 ## The idea in one example
 
@@ -89,15 +89,38 @@ pip install -e ".[test]"
 pytest
 ```
 
+## Toward learning from the graph
+
+A model's weights are fixed once it is trained: everything in a conversation is context it reads, and none of it changes what the model knows. [docs/learning.md](docs/learning.md) asks how a graph like this one could let a model learn for real, by training checked knowledge into its weights, and what makes that hard. The first pieces are built:
+
+```python
+from commonground import plan_consolidation
+
+p = g.propose("nina", "Recall advice", "must put first", "customer safety",
+              "Company policy.", level="principle")  # only people may write principles
+k = g.propose("model", "Acme Corp", "is affected by", "May recall",
+              "Follows from where Acme's cells are made.", depends_on=[c.id])
+
+g.needs_recheck()                         # after a change: what rests on it, and why it's in doubt
+plan = plan_consolidation(g)              # what may be trained into weights
+plan.ready, plan.held                     # ...and why the rest may not, per a tunable bar per level
+plan.probes                               # true/false checks for the model before and after training
+```
+
+[`examples/learning_loop.py`](examples/learning_loop.py) walks through it: a news report is corrected, everything resting on it is flagged for re-checking, and the new plan tests that the old belief is gone.
+
 ## Roadmap
 
 - [ ] LLM adapter: the model reads `to_context()` and returns propose / respond / ask / answer / refine / revise actions as JSON
+- [ ] Training step: train ready claims into an adapter, run the probes before and after, and reject updates that fail a core probe ([plan](docs/learning.md#a-first-experiment))
+- [ ] Checking agents that test claims against outside sources before they are accepted
 - [ ] A small study comparing chat alone with chat plus the graph ([plan](docs/design.md#how-to-test-the-idea))
 - [ ] Interactive web view where people click a link to challenge it
 - [ ] Entity resolution (merging "VoltCo" and "VoltCo SA")
 - [ ] Queries that understand time qualifiers ("true from 2019 to 2023")
 - [ ] Multiple humans and models, with per-participant views of agreement
 - [x] Questions, refinements, qualifiers, registered sources, independent agreement and a review queue (v0.2)
+- [x] Levels (principle, concept, fact), what each claim rests on, branch re-checking, a bar for what may reach the weights, and probes generated from the graph (unreleased)
 
 ## Related work
 
@@ -107,6 +130,8 @@ pytest
 - Wikidata and the [Wikidata Embedding Project](https://www.wikidata.org/wiki/Wikidata:Embedding_Project); Vrandečić & Krötzsch (2014), *Wikidata: A Free Collaborative Knowledgebase*, Communications of the ACM 57(10): references, qualifiers and ranks on every statement
 - Clark & Brennan (1991), *Grounding in Communication*, the psychology of building common ground
 - Doyle (1979), *A Truth Maintenance System*, Artificial Intelligence 12(3): justifications for every belief, withdrawn when what they rest on is withdrawn
+- McClelland, McNaughton & O'Reilly (1995), *Why There Are Complementary Learning Systems in the Hippocampus and Neocortex*, Psychological Review 102(3): fast learning, then slow consolidation
+- Gärdenfors & Makinson (1988), *Revisions of Knowledge Systems Using Epistemic Entrenchment*: the most entrenched beliefs are given up last
 - Kunz & Rittel (1970), *Issues as Elements of Information Systems*: IBIS, which separates questions from the positions and arguments about them
 - Dung (1995), *On the Acceptability of Arguments and its Fundamental Role in Nonmonotonic Reasoning, Logic Programming and n-Person Games*, Artificial Intelligence 77(2)
 - Sharma et al. (2023), *Towards Understanding Sycophancy in Language Models* ([arXiv:2310.13548](https://arxiv.org/abs/2310.13548)): why a model's agreement needs a reason

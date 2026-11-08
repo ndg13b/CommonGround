@@ -1,5 +1,26 @@
 # Changelog
 
+## Unreleased
+
+First steps toward letting a model learn from the graph. [docs/learning.md](docs/learning.md) explains the design.
+
+### Added
+
+- **Levels**: `propose(..., level=...)` places a claim among principles, concepts and facts, from most to least entrenched. Only humans may propose, revise or refine principles. `revise()` and `refine()` keep the level unless given a new one.
+- **What a claim rests on**: `depends_on=[...]` on `propose()`, `revise()` and `refine()`. Revisions and refinements inherit the current versions of what the original rested on. `dependents()` lists everything downstream of a claim. A revision that would rest on its own dependents is refused, so support can't be circular.
+- **`needs_recheck()`** lists active claims whose support is in doubt, because something they rest on was revised, isn't accepted, or needs re-checking itself. Most entrenched claims come first. Revising a claim with nothing changed re-affirms it.
+- **Independent sources**: `add_source(..., origin=...)` records what a source repeats, and `origin_of()` finds the original.
+- **`plan_consolidation(graph, thresholds, changed)`** (new `consolidation` module) sorts active claims into those ready to be trained into weights and those held back, with reasons. The bar is a `Threshold` per level (agreeing voices, human voices, independent sources), with `DEFAULT_THRESHOLDS`. It generates `Probe`s: core, fact, negative and ripple.
+- `current()` returns the latest version of a claim; `questions_on()` lists the questions about a claim.
+- `examples/learning_loop.py` and `docs/learning.md`.
+
+### Changed
+
+- `to_context()` groups claims under Principles, Concepts and Facts when there are principles or concepts. It also shows what each claim rests on, which claims need re-checking, and which sources repeat another.
+- `why()` shows a claim's level when it isn't a fact, what it rests on, what it supports, and why it needs re-checking.
+- `explain_path()` reports claims in the chain that need re-checking, and `find_paths()` ranks such chains lower among chains of equal length.
+- Saved graphs include each claim's level and dependencies and each source's origin. Files saved by 0.2 still load.
+
 ## 0.2.0 (2026-10-09)
 
 Changes from a design review of 0.1. [docs/design.md](docs/design.md) explains each one.
